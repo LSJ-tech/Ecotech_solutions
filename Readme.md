@@ -108,6 +108,8 @@ Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
 - Fechas de fin anteriores a la fecha de inicio.
 - Registros de tiempo con horas menores o iguales a cero o mayores que 24.
 - Usuarios con nombre o contraseña vacíos.
+- Rollback automático ante errores de SQLite.
+- Cierre controlado ante interrupciones del usuario o fin de entrada.
 
 ### Criterio 2.1.5: revisión crítica del código apoyado por IA
 
@@ -116,8 +118,6 @@ Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
 La revisión detectó que algunas operaciones de actualización SQLite podían saltarse las validaciones aplicadas al crear entidades. Se corrigió el problema reutilizando las validaciones de texto, fechas y horas en las operaciones CRUD.
 
 Además, se reforzó la seguridad del modelo de usuario: la propiedad `contrasena` ya no expone el valor real en texto plano, y el acceso interno se controla mediante `obtener_contrasena_interna()` y `verificar_contrasena()`. Esto evita fugas de credenciales por lectura directa del objeto y mantiene el flujo de autenticación y persistencia bajo validación explícita.
-
-También se reforzó la sanitización de RUT: el sistema valida el formato chileno y el dígito verificador, rechazando entradas con digito incorrecto o formato inválido.
 
 La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los hallazgos, las decisiones técnicas y la validación de cada mejora.
 

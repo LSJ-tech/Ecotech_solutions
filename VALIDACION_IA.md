@@ -260,36 +260,47 @@ La corrección se validó con una prueba directa en Python: al instanciar un usu
 - Compilación correcta con `py -3 -m py_compile main.py`.
 - Resultado de la revisión: `Criterio 2.1.5 reforzado con corrección de fuga de credenciales.`
 
-## Cambio 11 - Validación de RUT chileno con dígito verificador
+## Cambio 11 - Revisión de validación de RUT
 
 **Fecha:** 2026-09-12
 **Archivo modificado:** `main.py`
-**Objetivo:** reforzar la validación de entradas sensibles y cumplir con la lógica real del RUT chileno.
+**Objetivo:** identificar la necesidad de reforzar la validación de entradas sensibles.
 
 ### Hallazgo
 
-La validación previa aceptaba algunos valores con formato básico, pero no comprobaba el dígito verificador. Eso dejaba margen para que RUTs incorrectos pasaran por el sistema.
+La revisión detectó que la validación actual solo comprueba que el RUT no esté vacío y no calcula el dígito verificador.
 
 ### Implementación
 
-Se actualizó la función de normalización y validación para:
-
-- limpiar espacios y puntos;
-- aceptar el formato `12345678-9` y `12.345.678-9`;
-- calcular el dígito verificador usando el algoritmo chileno;
-- rechazar RUTs con formato inválido o dígito incorrecto.
+No se modificó `main.py` en este cambio. La validación completa del RUT queda pendiente.
 
 ### Verificación ejecutada
 
-Se probaron casos reales en Python:
-
-- `11.111.111-1` -> válido
-- `12.345.678-9` -> rechazado
-- `12345678-0` -> rechazado
-- `abc` -> rechazado
-
-La salida confirmó que la validación se comporta como corresponde a la normativa chilena.
+Se verificó en el código que `Empleado.__post_init__()` utiliza `validar_texto()` para rechazar valores vacíos, pero acepta cualquier texto no vacío.
 
 ### Resultado
 
-El sistema actual queda reforzado en la validación de identidad del empleado y en la seguridad de los datos ingresados por consola y por código.
+La validación avanzada del RUT se mantiene como mejora pendiente.
+
+## Cambio 13 - Manejo de errores y excepciones
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** implementar el criterio 2.1.4 mediante rollback de SQLite y cierre controlado del menú.
+
+### Implementación
+
+Se agregó `revertir_si_falla()`, un decorador que ejecuta `connection.rollback()` cuando una operación de escritura produce una excepción de SQLite. Se aplicó a las operaciones de inserción, actualización, eliminación y asignación.
+
+También se agregó manejo de errores al abrir o inicializar la base de datos y se controlan `EOFError` y `KeyboardInterrupt` para finalizar la sesión sin traceback.
+
+### Validación
+
+- Una asignación con un empleado inexistente produjo `sqlite3.IntegrityError` y revirtió la operación.
+- La misma conexión permitió realizar después una asignación válida.
+- `main.py` compiló correctamente con el intérprete virtual del proyecto.
+- El editor no reportó errores en los archivos modificados.
+
+### Resultado
+
+El sistema mantiene la consistencia de las operaciones SQLite ante errores y finaliza de manera controlada cuando la entrada del usuario se interrumpe.

@@ -5,7 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date
+from functools import wraps
 from pathlib import Path
+from typing import Any, Callable
 import hashlib
 import hmac
 import secrets
@@ -97,6 +99,22 @@ def conectar_bd(
 	return connection
 
 
+def revertir_si_falla(funcion: Callable[..., Any]) -> Callable[..., Any]:
+	"""Revierte la transacción cuando una operación SQLite falla."""
+
+	@wraps(funcion)
+	def envoltura(
+		connection: sqlite3.Connection, *args: Any, **kwargs: Any
+	) -> Any:
+		try:
+			return funcion(connection, *args, **kwargs)
+		except sqlite3.Error:
+			connection.rollback()
+			raise
+
+	return envoltura
+
+
 def inicializar_bd(connection: sqlite3.Connection) -> None:
 	"""Crea las tablas del sistema si todavía no existen."""
 
@@ -140,6 +158,7 @@ def verificar_contrasena(contrasena: str, almacenada: str) -> bool:
 		return False
 
 
+@revertir_si_falla
 def guardar_departamento(connection: sqlite3.Connection, nombre: str) -> int:
 	"""Inserta un departamento y devuelve su identificador."""
 
@@ -151,6 +170,7 @@ def guardar_departamento(connection: sqlite3.Connection, nombre: str) -> int:
 	return int(cursor.lastrowid)
 
 
+@revertir_si_falla
 def guardar_empleado(
 	connection: sqlite3.Connection,
 	empleado: Empleado,
@@ -193,6 +213,7 @@ def listar_empleados(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	)
 
 
+@revertir_si_falla
 def actualizar_empleado(
 	connection: sqlite3.Connection,
 	rut: str,
@@ -224,6 +245,7 @@ def actualizar_empleado(
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def eliminar_empleado(connection: sqlite3.Connection, rut: str) -> bool:
 	"""Elimina un empleado y devuelve si existía."""
 
@@ -232,6 +254,7 @@ def eliminar_empleado(connection: sqlite3.Connection, rut: str) -> bool:
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def guardar_proyecto(connection: sqlite3.Connection, proyecto: Proyecto) -> int:
 	"""Inserta un proyecto y devuelve su identificador."""
 
@@ -263,6 +286,7 @@ def listar_departamentos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	)
 
 
+@revertir_si_falla
 def actualizar_departamento(
 	connection: sqlite3.Connection, id_departamento: int, nombre: str
 ) -> bool:
@@ -277,6 +301,7 @@ def actualizar_departamento(
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def eliminar_departamento(connection: sqlite3.Connection, id_departamento: int) -> bool:
 	"""Elimina un departamento y devuelve si existía."""
 
@@ -300,6 +325,7 @@ def listar_proyectos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	)
 
 
+@revertir_si_falla
 def actualizar_proyecto(
 	connection: sqlite3.Connection,
 	id_proyecto: int,
@@ -338,6 +364,7 @@ def actualizar_proyecto(
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def eliminar_proyecto(connection: sqlite3.Connection, id_proyecto: int) -> bool:
 	"""Elimina un proyecto y devuelve si existía."""
 
@@ -348,6 +375,7 @@ def eliminar_proyecto(connection: sqlite3.Connection, id_proyecto: int) -> bool:
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def guardar_usuario(connection: sqlite3.Connection, usuario: Usuario) -> int:
 	"""Inserta un usuario asociado opcionalmente a un empleado."""
 
@@ -383,6 +411,7 @@ def listar_usuarios(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	)
 
 
+@revertir_si_falla
 def actualizar_usuario(
 	connection: sqlite3.Connection,
 	id_usuario: int,
@@ -404,6 +433,7 @@ def actualizar_usuario(
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def eliminar_usuario(connection: sqlite3.Connection, id_usuario: int) -> bool:
 	"""Elimina un usuario y devuelve si existía."""
 
@@ -414,6 +444,7 @@ def eliminar_usuario(connection: sqlite3.Connection, id_usuario: int) -> bool:
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def asignar_empleado_proyecto_bd(
 	connection: sqlite3.Connection, rut: str, id_proyecto: int
 ) -> None:
@@ -429,6 +460,7 @@ def asignar_empleado_proyecto_bd(
 	connection.commit()
 
 
+@revertir_si_falla
 def guardar_registro_tiempo(
 	connection: sqlite3.Connection, registro: RegistroTiempo
 ) -> int:
@@ -481,6 +513,7 @@ def listar_registros_tiempo(connection: sqlite3.Connection) -> list[sqlite3.Row]
 	)
 
 
+@revertir_si_falla
 def actualizar_registro_tiempo(
 	connection: sqlite3.Connection,
 	id_registro: int,
@@ -504,6 +537,7 @@ def actualizar_registro_tiempo(
 	return cursor.rowcount == 1
 
 
+@revertir_si_falla
 def eliminar_registro_tiempo(connection: sqlite3.Connection, id_registro: int) -> bool:
 	"""Elimina un registro de tiempo y devuelve si existía."""
 
@@ -1065,8 +1099,12 @@ def mostrar_reportes_menu(connection: sqlite3.Connection) -> None:
 def mostrar_menu() -> None:
 	"""Ejecuta el menu principal conectado a la base de datos local."""
 
-	connection = conectar_bd()
-	inicializar_bd(connection)
+	try:
+		connection = conectar_bd()
+		inicializar_bd(connection)
+	except sqlite3.Error as error:
+		print(f"No se pudo iniciar la base de datos: {error}")
+		return
 	try:
 		usuario_actual = iniciar_sesion(connection)
 		if usuario_actual is None:
@@ -1135,6 +1173,8 @@ def mostrar_menu() -> None:
 					print("Opcion no valida.")
 			except (ValueError, PermissionError, sqlite3.IntegrityError) as error:
 				print(f"No se pudo completar la operacion: {error}")
+	except (EOFError, KeyboardInterrupt):
+		print("\nSesion finalizada por el usuario.")
 	finally:
 		connection.close()
 
