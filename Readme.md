@@ -93,6 +93,7 @@ La implementación incluye:
 - Tabla intermedia `empleado_proyecto` para la relación muchos a muchos.
 - Operaciones CRUD para departamentos, empleados, proyectos, usuarios y registros de tiempo.
 - Persistencia de proyectos, asignaciones y registros de horas.
+- Validación de la asignación empleado-proyecto antes de guardar horas.
 - Consultas parametrizadas para separar los datos de las instrucciones SQL.
 
 ### Criterio 2.1.4: validaciones y manejo de excepciones
@@ -116,7 +117,9 @@ La revisión detectó que algunas operaciones de actualización SQLite podían s
 
 Además, se reforzó la seguridad del modelo de usuario: la propiedad `contrasena` ya no expone el valor real en texto plano, y el acceso interno se controla mediante `obtener_contrasena_interna()` y `verificar_contrasena()`. Esto evita fugas de credenciales por lectura directa del objeto y mantiene el flujo de autenticación y persistencia bajo validación explícita.
 
-La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen el hallazgo, la decisión técnica y la validación de la corrección.
+También se reforzó la sanitización de RUT: el sistema valida el formato chileno y el dígito verificador, rechazando entradas con digito incorrecto o formato inválido.
+
+La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los hallazgos, las decisiones técnicas y la validación de cada mejora.
 
 ## Ejecución
 
@@ -164,6 +167,7 @@ Base de datos conectada: ecotech_solutions.db
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
 - Prueba del menú conectado a la base de datos local.
 - Prueba de registro, login, roles y migración de contraseñas.
+- Validación del RUT chileno con cálculo del dígito verificador y rechazo de formatos inválidos.
 
 ## Registro de cambios y uso de IA
 

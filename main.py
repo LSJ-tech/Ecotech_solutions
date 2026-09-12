@@ -434,6 +434,19 @@ def guardar_registro_tiempo(
 ) -> int:
 	"""Persiste un registro de horas asociado a empleado y proyecto."""
 
+	asignacion = connection.execute(
+		"""
+		SELECT 1
+		FROM empleado_proyecto
+		WHERE rut_empleado = ? AND id_proyecto = ?
+		""",
+		(registro.empleado.rut, registro.proyecto.id_proyecto),
+	).fetchone()
+	if asignacion is None:
+		raise ValueError(
+			"El empleado debe estar asignado al proyecto antes de registrar horas."
+		)
+
 	cursor = connection.execute(
 		"""
 		INSERT INTO registros_tiempo

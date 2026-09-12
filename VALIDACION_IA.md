@@ -206,6 +206,30 @@ La gestión de usuarios y la opción de cambiar roles están restringidas al rol
 
 El código `1234` es temporal y débil, tal como se solicitó para esta etapa. Debe reemplazarse por una variable de entorno o un mecanismo de configuración segura antes de usar el sistema en producción.
 
+## Cambio 12 - Integridad de registros de tiempo en SQLite
+
+**Fecha:** 2026-09-12  
+**Archivo modificado:** `main.py`  
+**Objetivo:** reforzar el criterio 2.1.3 evitando registros de horas sin una asignación empleado-proyecto válida.
+
+### Hallazgo
+
+La tabla `empleado_proyecto` mantenía la relación muchos a muchos, pero `guardar_registro_tiempo()` solo comprobaba mediante claves foráneas que existieran el empleado y el proyecto. Era posible registrar horas aunque ambos no estuvieran relacionados.
+
+### Implementación
+
+Antes de insertar en `registros_tiempo`, `guardar_registro_tiempo()` consulta la tabla `empleado_proyecto` con parámetros. Si no existe la asignación, lanza `ValueError` y no realiza la inserción.
+
+### Validación
+
+- Se comprobó que un registro sin asignación empleado-proyecto es rechazado.
+- Se comprobó que, después de crear la asignación, el registro de horas se guarda correctamente.
+- Se verificó la compilación de `main.py` con el intérprete virtual del proyecto.
+
+### Resultado
+
+La regla de integridad queda centralizada en la capa de persistencia y se aplica tanto al menú como a las llamadas directas a SQLite.
+
 ## Cambio 10 - Revisión crítica 2.1.5: protección de credenciales
 
 **Fecha:** 2026-09-12  
@@ -235,3 +259,37 @@ La corrección se validó con una prueba directa en Python: al instanciar un usu
 - Verificación posterior: retorna `********` y no el valor original.
 - Compilación correcta con `py -3 -m py_compile main.py`.
 - Resultado de la revisión: `Criterio 2.1.5 reforzado con corrección de fuga de credenciales.`
+
+## Cambio 11 - Validación de RUT chileno con dígito verificador
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** reforzar la validación de entradas sensibles y cumplir con la lógica real del RUT chileno.
+
+### Hallazgo
+
+La validación previa aceptaba algunos valores con formato básico, pero no comprobaba el dígito verificador. Eso dejaba margen para que RUTs incorrectos pasaran por el sistema.
+
+### Implementación
+
+Se actualizó la función de normalización y validación para:
+
+- limpiar espacios y puntos;
+- aceptar el formato `12345678-9` y `12.345.678-9`;
+- calcular el dígito verificador usando el algoritmo chileno;
+- rechazar RUTs con formato inválido o dígito incorrecto.
+
+### Verificación ejecutada
+
+Se probaron casos reales en Python:
+
+- `11.111.111-1` -> válido
+- `12.345.678-9` -> rechazado
+- `12345678-0` -> rechazado
+- `abc` -> rechazado
+
+La salida confirmó que la validación se comporta como corresponde a la normativa chilena.
+
+### Resultado
+
+El sistema actual queda reforzado en la validación de identidad del empleado y en la seguridad de los datos ingresados por consola y por código.
