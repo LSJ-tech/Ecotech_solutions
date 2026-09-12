@@ -304,3 +304,23 @@ También se agregó manejo de errores al abrir o inicializar la base de datos y 
 ### Resultado
 
 El sistema mantiene la consistencia de las operaciones SQLite ante errores y finaliza de manera controlada cuando la entrada del usuario se interrumpe.
+
+## Cambio 14 - Cobertura completa de errores SQLite en el menú
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** mejorar el criterio 2.1.4 evitando que errores SQLite distintos de `IntegrityError` finalicen el programa.
+
+### Hallazgo
+
+Los manejadores del acceso y del menú principal capturaban `sqlite3.IntegrityError`, pero dejaban sin manejar otros errores de SQLite, como `sqlite3.OperationalError`.
+
+### Implementación
+
+Se ampliaron ambos manejadores para capturar `sqlite3.Error`, la clase base de las excepciones SQLite. Se mantiene el rollback automático implementado en el cambio 13.
+
+### Validación
+
+- Se confirmó que `sqlite3.OperationalError` pertenece a `sqlite3.Error` y queda cubierto por los manejadores.
+- `main.py` compiló correctamente.
+- El editor no reportó errores en los archivos modificados.

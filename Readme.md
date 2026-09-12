@@ -108,7 +108,7 @@ Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
 - Fechas de fin anteriores a la fecha de inicio.
 - Registros de tiempo con horas menores o iguales a cero o mayores que 24.
 - Usuarios con nombre o contraseña vacíos.
-- Rollback automático ante errores de SQLite.
+- Rollback automático y manejo de errores SQLite durante las operaciones.
 - Cierre controlado ante interrupciones del usuario o fin de entrada.
 
 ### Criterio 2.1.5: revisión crítica del código apoyado por IA

@@ -881,7 +881,7 @@ def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 				return None
 			else:
 				print("Opcion no valida.")
-		except (ValueError, sqlite3.IntegrityError) as error:
+		except (ValueError, sqlite3.Error) as error:
 			print(f"No se pudo completar el acceso: {error}")
 
 
@@ -1171,7 +1171,7 @@ def mostrar_menu() -> None:
 					break
 				else:
 					print("Opcion no valida.")
-			except (ValueError, PermissionError, sqlite3.IntegrityError) as error:
+			except (ValueError, PermissionError, sqlite3.Error) as error:
 				print(f"No se pudo completar la operacion: {error}")
 	except (EOFError, KeyboardInterrupt):
 		print("\nSesion finalizada por el usuario.")
