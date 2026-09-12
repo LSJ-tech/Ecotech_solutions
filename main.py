@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 import hashlib
 import hmac
+import re
 import secrets
 import sqlite3
 
@@ -78,6 +79,29 @@ def validar_texto(valor: str, campo: str) -> str:
 	if not isinstance(valor, str) or not valor.strip():
 		raise ValueError(f"{campo} no puede estar vacío.")
 	return valor.strip()
+
+
+def validar_rut(valor: str) -> str:
+	"""Normaliza y valida un RUT chileno con su dígito verificador."""
+
+	valor = validar_texto(valor, "El RUT")
+	normalizado = valor.replace(".", "").replace(" ", "").upper()
+	coincidencia = re.fullmatch(r"(\d{1,8})-([\dK])", normalizado)
+	if coincidencia is None:
+		raise ValueError("El RUT debe tener el formato 12345678-5.")
+
+	cuerpo, digito = coincidencia.groups()
+	suma = 0
+	multiplicador = 2
+	for caracter in reversed(cuerpo):
+		suma += int(caracter) * multiplicador
+		multiplicador = 2 if multiplicador == 7 else multiplicador + 1
+
+	resto = 11 - (suma % 11)
+	digito_esperado = "0" if resto == 11 else "K" if resto == 10 else str(resto)
+	if digito != digito_esperado:
+		raise ValueError("El dígito verificador del RUT no es válido.")
+	return f"{int(cuerpo)}-{digito_esperado}"
 
 
 def validar_horas(horas: float) -> float:
@@ -226,6 +250,7 @@ def actualizar_empleado(
 ) -> bool:
 	"""Actualiza los datos de un empleado y devuelve si existía."""
 
+	rut = validar_rut(rut)
 	nombre = validar_texto(nombre, "El nombre")
 	apellido = validar_texto(apellido, "El apellido")
 	correo = validar_texto(correo, "El correo")
@@ -249,6 +274,7 @@ def actualizar_empleado(
 def eliminar_empleado(connection: sqlite3.Connection, rut: str) -> bool:
 	"""Elimina un empleado y devuelve si existía."""
 
+	rut = validar_rut(rut)
 	cursor = connection.execute("DELETE FROM empleados WHERE rut = ?", (rut,))
 	connection.commit()
 	return cursor.rowcount == 1
@@ -450,6 +476,7 @@ def asignar_empleado_proyecto_bd(
 ) -> None:
 	"""Persiste la relación muchos a muchos entre empleado y proyecto."""
 
+	rut = validar_rut(rut)
 	connection.execute(
 		"""
 		INSERT INTO empleado_proyecto (rut_empleado, id_proyecto)
@@ -576,7 +603,7 @@ class Empleado:
 	registros_tiempo: list[RegistroTiempo] = field(default_factory=list)
 
 	def __post_init__(self) -> None:
-		self.rut = validar_texto(self.rut, "El RUT")
+		self.rut = validar_rut(self.rut)
 		self.nombre = validar_texto(self.nombre, "El nombre")
 		self.apellido = validar_texto(self.apellido, "El apellido")
 		self.correo = validar_texto(self.correo, "El correo")
@@ -803,6 +830,7 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	rut_empleado = input("RUT del empleado (Enter si no corresponde): ").strip()
 	empleado = None
 	if rut_empleado:
+		rut_empleado = validar_rut(rut_empleado)
 		empleado_row = connection.execute(
 			"SELECT rut, nombre, apellido, correo, cargo "
 			"FROM empleados WHERE rut = ?",
@@ -973,6 +1001,7 @@ def crear_usuario_menu(connection: sqlite3.Connection) -> None:
 	rut_empleado = input("RUT del empleado (Enter para dejar sin asignar): ").strip()
 	empleado = None
 	if rut_empleado:
+		rut_empleado = validar_rut(rut_empleado)
 		empleado_row = connection.execute(
 			"SELECT rut, nombre, apellido, correo, cargo "
 			"FROM empleados WHERE rut = ?",
@@ -1030,7 +1059,7 @@ def asignar_proyecto_menu(connection: sqlite3.Connection) -> None:
 	"""Asigna un empleado a un proyecto y persiste la relacion."""
 
 	mostrar_empleados(connection)
-	rut = validar_texto(input("RUT del empleado: "), "El RUT")
+	rut = validar_rut(input("RUT del empleado: "))
 	mostrar_proyectos(connection)
 	id_proyecto = leer_entero("ID del proyecto: ")
 	asignar_empleado_proyecto_bd(connection, rut, id_proyecto)
@@ -1041,7 +1070,7 @@ def registrar_tiempo_menu(connection: sqlite3.Connection) -> None:
 	"""Registra horas trabajadas desde el menu."""
 
 	mostrar_empleados(connection)
-	rut = validar_texto(input("RUT del empleado: "), "El RUT")
+	rut = validar_rut(input("RUT del empleado: "))
 	mostrar_proyectos(connection)
 	id_proyecto = leer_entero("ID del proyecto: ")
 	fecha = leer_fecha("Fecha (YYYY-MM-DD): ")

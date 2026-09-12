@@ -167,7 +167,7 @@ Base de datos conectada: ecotech_solutions.db
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
 - Prueba del menú conectado a la base de datos local.
 - Prueba de registro, login, roles y migración de contraseñas.
-- Validación del RUT chileno con cálculo del dígito verificador y rechazo de formatos inválidos.
+- Validación del RUT chileno con normalización, cálculo del dígito verificador y rechazo de formatos inválidos.
 
 ## Registro de cambios y uso de IA
 

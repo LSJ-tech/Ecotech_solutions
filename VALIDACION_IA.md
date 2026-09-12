@@ -282,6 +282,30 @@ Se verificó en el código que `Empleado.__post_init__()` utiliza `validar_texto
 
 La validación avanzada del RUT se mantiene como mejora pendiente.
 
+## Cambio 15 - Validación completa del RUT chileno
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** validar el RUT chileno antes de crear empleados y usarlo en relaciones persistentes.
+
+### Implementación
+
+Se agregó `validar_rut()`, que elimina puntos y espacios, acepta `k` o `K`, calcula el dígito verificador mediante el algoritmo chileno y devuelve el RUT en formato canónico. Los valores con formato incorrecto o dígito verificador inválido producen `ValueError`.
+
+La validación se aplica al crear `Empleado`, actualizar o eliminar empleados, asignar proyectos y buscar empleados desde el menú.
+
+### Validación
+
+- `11.111.111-1` se acepta y normaliza.
+- `12.345.678-9` se rechaza por dígito incorrecto.
+- `12345678-0` se rechaza por dígito incorrecto.
+- `abc` y RUTs sin formato se rechazan.
+- `main.py` compila correctamente y el editor no reporta errores.
+
+### Resultado
+
+Los empleados y las relaciones persistidas utilizan únicamente RUTs con formato y dígito verificador válidos.
+
 ## Cambio 13 - Manejo de errores y excepciones
 
 **Fecha:** 2026-09-12
