@@ -64,3 +64,29 @@ La implementación se contrastó con el UML y con el criterio 2.1.2 de la rúbri
 - Prueba funcional completada con el resultado `Prueba 2.1.2 OK`.
 - Verificación de contraseña privada, actualización controlada y rechazo de valores vacíos.
 - Verificación de `ServicioReportes` con `ExportadorPDF` y `ExportadorExcel`.
+
+## Cambio 4 - Criterio 2.1.3 de la Unidad 2
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** integrar una base de datos SQLite y operaciones CRUD coherentes con el UML.
+
+### Implementación
+
+Se incorporó `sqlite3`, sin dependencias externas, con una ruta predeterminada en `ecotech_solutions.db`. `SCHEMA_SQL` crea las tablas de departamentos, empleados, proyectos, usuarios, registros de tiempo y la tabla intermedia `empleado_proyecto`.
+
+Se implementaron `conectar_bd()`, `inicializar_bd()`, `guardar_departamento()`, `guardar_empleado()`, `listar_empleados()`, `actualizar_empleado()`, `eliminar_empleado()`, `guardar_proyecto()`, `asignar_empleado_proyecto_bd()` y `guardar_registro_tiempo()`.
+
+Las operaciones utilizan consultas parametrizadas, claves foráneas y confirmación explícita mediante `commit()`. Las pruebas pueden usar `:memory:` para evitar generar archivos temporales.
+
+### Revisión técnica
+
+La estructura de tablas y relaciones se contrastó con `uml.png` y con el requisito 2.1.3 de la rúbrica. Se utilizó IA como apoyo para proponer el esquema inicial, pero se revisaron manualmente las claves primarias, las claves foráneas, la tabla intermedia y los parámetros de las consultas.
+
+### Validación
+
+- Compilación correcta con `py -3 -m py_compile C:\Python\Ecotech_solutions\main.py`.
+- Prueba funcional completada con el resultado `Prueba 2.1.3 SQLite OK`.
+- Verificación de creación del esquema SQLite en memoria.
+- Verificación del CRUD de empleados.
+- Verificación de proyecto, asignación empleado-proyecto y registro de horas.

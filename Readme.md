@@ -52,6 +52,21 @@ Se incorporaron los siguientes elementos:
 - Polimorfismo en `ServicioReportes`, que trabaja con cualquier implementación de `IExportador`.
 - Reutilización de la lógica común del servicio sin duplicar el proceso de generación de informes.
 
+### Criterio 2.1.3: integración con base de datos
+
+**Estado: completado.**
+
+Se seleccionó **SQLite** por ser una base de datos relacional integrada en Python mediante la librería estándar `sqlite3`. La base se guarda en `ecotech_solutions.db` cuando se utiliza la ruta predeterminada.
+
+La implementación incluye:
+
+- Creación de tablas para departamentos, empleados, proyectos, usuarios y registros de tiempo.
+- Claves foráneas para mantener las relaciones del UML.
+- Tabla intermedia `empleado_proyecto` para la relación muchos a muchos.
+- Operaciones CRUD para empleados: registrar, consultar, actualizar y eliminar.
+- Persistencia de proyectos, asignaciones y registros de horas.
+- Consultas parametrizadas para separar los datos de las instrucciones SQL.
+
 ## Correspondencia con el UML
 
 La implementación utiliza `dataclass` para representar las entidades del diagrama y anotaciones de tipo para expresar sus relaciones:
@@ -80,6 +95,7 @@ Ecotech_solutions/
 
 - Python 3.10 o superior.
 - No se requieren dependencias externas para la etapa actual.
+- SQLite se utiliza mediante la librería estándar `sqlite3`.
 
 ## Ejecución
 
@@ -102,12 +118,14 @@ Modelo de EcoTechSolutions cargado correctamente.
 - Instanciación de las entidades principales.
 - Verificación de las relaciones entre departamento, empleado, proyecto y registro de tiempo.
 - Verificación de que las relaciones no agreguen duplicados.
+- Inicialización de un esquema SQLite en una base temporal en memoria.
+- Prueba de registro, consulta, actualización y eliminación de empleados.
+- Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
 
 ## Próximas etapas de la Unidad 2
 
-1. Integrar una base de datos y operaciones CRUD según el criterio 2.1.3.
-2. Incorporar validaciones y manejo de excepciones según el criterio 2.1.4.
-3. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
+1. Incorporar validaciones y manejo de excepciones según el criterio 2.1.4.
+2. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
 
 ## Registro de cambios y uso de IA
 
