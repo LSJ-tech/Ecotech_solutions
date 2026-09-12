@@ -114,7 +114,9 @@ Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
 
 La revisión detectó que algunas operaciones de actualización SQLite podían saltarse las validaciones aplicadas al crear entidades. Se corrigió el problema reutilizando las validaciones de texto, fechas y horas en las operaciones CRUD.
 
-También se documentó como riesgo residual que `Usuario` conserva y expone la contraseña en texto plano mediante su propiedad actual. Para un sistema real debería utilizarse un hash seguro y un método de verificación, pero ese cambio requiere definir primero el flujo de autenticación.
+Además, se reforzó la seguridad del modelo de usuario: la propiedad `contrasena` ya no expone el valor real en texto plano, y el acceso interno se controla mediante `obtener_contrasena_interna()` y `verificar_contrasena()`. Esto evita fugas de credenciales por lectura directa del objeto y mantiene el flujo de autenticación y persistencia bajo validación explícita.
+
+La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen el hallazgo, la decisión técnica y la validación de la corrección.
 
 ## Ejecución
 

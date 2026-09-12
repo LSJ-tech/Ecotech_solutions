@@ -205,3 +205,33 @@ La gestión de usuarios y la opción de cambiar roles están restringidas al rol
 ### Observación de seguridad
 
 El código `1234` es temporal y débil, tal como se solicitó para esta etapa. Debe reemplazarse por una variable de entorno o un mecanismo de configuración segura antes de usar el sistema en producción.
+
+## Cambio 10 - Revisión crítica 2.1.5: protección de credenciales
+
+**Fecha:** 2026-09-12  
+**Archivo modificado:** `main.py`  
+**Objetivo:** corregir el riesgo detectado en la revisión de seguridad del criterio 2.1.5.
+
+### Hallazgo
+
+La propiedad pública `contrasena` de la clase `Usuario` devolvía el texto original de la contraseña, lo que permitía exponer credenciales sensibles al leer el objeto directamente. Aunque el sistema usaba hash al guardar en la base de datos, la lectura del atributo público era un riesgo verificable y no compatible con principios de seguridad básicos.
+
+### Implementación
+
+Se modificó la clase `Usuario` para que:
+
+- la propiedad `contrasena` devuelva un valor enmascarado (`********`) y no el secreto real;
+- la contraseña real permanezca en un atributo privado (`_contrasena`), usado únicamente en validaciones internas y persistencia;
+- se agreguen los métodos `obtener_contrasena_interna()` y `verificar_contrasena()` para controlar el acceso a la contraseña sin exponerla;
+- la persistencia use `usuario.obtener_contrasena_interna()` antes de generar el hash.
+
+### Revisión técnica
+
+La corrección se validó con una prueba directa en Python: al instanciar un usuario y consultar `usuario.contrasena`, el valor devuelto ya no es la contraseña real. La comprobación se realizó con una instancia de prueba y se confirmó que la validación del login se mantiene usando `verificar_contrasena()`.
+
+### Validación
+
+- Prueba de reproducciòn: `Usuario(1, 'ana', 'supersecreta').contrasena` devolvía la contraseña real antes del cambio.
+- Verificación posterior: retorna `********` y no el valor original.
+- Compilación correcta con `py -3 -m py_compile main.py`.
+- Resultado de la revisión: `Criterio 2.1.5 reforzado con corrección de fuga de credenciales.`

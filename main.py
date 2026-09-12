@@ -359,7 +359,7 @@ def guardar_usuario(connection: sqlite3.Connection, usuario: Usuario) -> int:
 		""",
 		(
 			usuario.nombre_usuario,
-			generar_hash_contrasena(usuario.contrasena),
+			generar_hash_contrasena(usuario.obtener_contrasena_interna()),
 			int(usuario.activo),
 			usuario.empleado.rut if usuario.empleado else None,
 			usuario.rol,
@@ -589,9 +589,19 @@ class Usuario:
 
 	@property
 	def contrasena(self) -> str:
-		"""Permite validar credenciales sin exponer el atributo interno."""
+		"""Evita exponer la contraseña en texto plano."""
+
+		return "********"
+
+	def obtener_contrasena_interna(self) -> str:
+		"""Devuelve la contraseña real solo para uso interno de validación y persistencia."""
 
 		return self._contrasena
+
+	def verificar_contrasena(self, contrasena: str) -> bool:
+		"""Valida la contraseña ingresada sin exponer la almacenada."""
+
+		return verificar_contrasena(contrasena, self._contrasena)
 
 	def actualizar_contrasena(self, nueva_contrasena: str) -> None:
 		"""Actualiza la contraseña a través de una operación controlada."""
@@ -782,13 +792,15 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 			(generar_hash_contrasena(contrasena), fila["id_usuario"]),
 		)
 		connection.commit()
-	return Usuario(
+	usuario = Usuario(
 		fila["id_usuario"],
 		fila["nombre_usuario"],
-		contrasena,
+		"********",
 		bool(fila["activo"]),
 		rol=fila["rol"] or "empleado",
 	)
+	usuario._contrasena = contrasena
+	return usuario
 
 
 def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
