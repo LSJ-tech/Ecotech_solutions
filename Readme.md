@@ -123,10 +123,22 @@ Modelo de EcoTechSolutions cargado correctamente.
 - Prueba de registro, consulta, actualización y eliminación de departamentos, proyectos, usuarios y registros de tiempo.
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
 
-## Próximas etapas de la Unidad 2
+## Criterio 2.1.4: validaciones y manejo de excepciones
 
-1. Incorporar validaciones y manejo de excepciones según el criterio 2.1.4.
-2. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
+**Estado: completado.**
+
+Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
+
+- Campos de texto obligatorios vacíos.
+- Correos sin un formato básico válido.
+- Identificadores negativos.
+- Fechas de fin anteriores a la fecha de inicio.
+- Registros de tiempo con horas menores o iguales a cero o mayores que 24.
+- Usuarios con nombre o contraseña vacíos.
+
+## Próxima etapa de la Unidad 2
+
+1. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
 
 ## Registro de cambios y uso de IA
 

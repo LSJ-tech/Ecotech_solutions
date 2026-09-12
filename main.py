@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS registros_tiempo (
 """
 
 
+def validar_texto(valor: str, campo: str) -> str:
+	"""Valida que un campo de texto obligatorio tenga contenido."""
+
+	if not isinstance(valor, str) or not valor.strip():
+		raise ValueError(f"{campo} no puede estar vacío.")
+	return valor.strip()
+
+
 def conectar_bd(
 	db_path: str | Path = DATABASE_PATH,
 ) -> sqlite3.Connection:
@@ -429,6 +437,11 @@ class Departamento:
 	nombre: str
 	empleados: list[Empleado] = field(default_factory=list)
 
+	def __post_init__(self) -> None:
+		if self.id_departamento < 0:
+			raise ValueError("El identificador del departamento no puede ser negativo.")
+		self.nombre = validar_texto(self.nombre, "El nombre del departamento")
+
 
 @dataclass
 class Empleado:
@@ -443,6 +456,15 @@ class Empleado:
 	proyectos: list[Proyecto] = field(default_factory=list)
 	registros_tiempo: list[RegistroTiempo] = field(default_factory=list)
 
+	def __post_init__(self) -> None:
+		self.rut = validar_texto(self.rut, "El RUT")
+		self.nombre = validar_texto(self.nombre, "El nombre")
+		self.apellido = validar_texto(self.apellido, "El apellido")
+		self.correo = validar_texto(self.correo, "El correo")
+		self.cargo = validar_texto(self.cargo, "El cargo")
+		if "@" not in self.correo:
+			raise ValueError("El correo debe tener un formato válido.")
+
 
 @dataclass
 class Proyecto:
@@ -456,6 +478,19 @@ class Proyecto:
 	empleados: list[Empleado] = field(default_factory=list)
 	registros_tiempo: list[RegistroTiempo] = field(default_factory=list)
 
+	def __post_init__(self) -> None:
+		if self.id_proyecto < 0:
+			raise ValueError("El identificador del proyecto no puede ser negativo.")
+		self.nombre = validar_texto(self.nombre, "El nombre del proyecto")
+		self.descripcion = validar_texto(self.descripcion, "La descripción")
+		if not isinstance(self.fecha_inicio, date):
+			raise ValueError("La fecha de inicio debe ser una fecha válida.")
+		if self.fecha_fin is not None:
+			if not isinstance(self.fecha_fin, date):
+				raise ValueError("La fecha de fin debe ser una fecha válida.")
+			if self.fecha_fin < self.fecha_inicio:
+				raise ValueError("La fecha de fin no puede ser anterior a la fecha de inicio.")
+
 
 class Usuario:
 	"""Representa las credenciales de acceso de un empleado."""
@@ -468,9 +503,11 @@ class Usuario:
 		activo: bool = True,
 		empleado: Empleado | None = None,
 	) -> None:
+		if id_usuario < 0:
+			raise ValueError("El identificador del usuario no puede ser negativo.")
 		self.id_usuario = id_usuario
-		self.nombre_usuario = nombre_usuario
-		self._contrasena = contrasena
+		self.nombre_usuario = validar_texto(nombre_usuario, "El nombre de usuario")
+		self._contrasena = validar_texto(contrasena, "La contraseña")
 		self.activo = activo
 		self.empleado = empleado
 
@@ -497,6 +534,18 @@ class RegistroTiempo:
 	horas: float
 	empleado: Empleado
 	proyecto: Proyecto
+
+	def __post_init__(self) -> None:
+		if self.id_registro < 0:
+			raise ValueError("El identificador del registro no puede ser negativo.")
+		if not isinstance(self.fecha, date):
+			raise ValueError("La fecha del registro debe ser una fecha válida.")
+		if not isinstance(self.horas, (int, float)) or not 0 < self.horas <= 24:
+			raise ValueError("Las horas deben ser mayores que 0 y menores o iguales a 24.")
+		if not isinstance(self.empleado, Empleado):
+			raise ValueError("El registro debe estar asociado a un empleado válido.")
+		if not isinstance(self.proyecto, Proyecto):
+			raise ValueError("El registro debe estar asociado a un proyecto válido.")
 
 
 class IExportador(ABC):

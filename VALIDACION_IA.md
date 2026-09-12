@@ -116,3 +116,26 @@ Se revisó que cada operación use consultas parametrizadas y que las operacione
 - CRUD verificado para departamentos, empleados, proyectos, usuarios y registros de tiempo.
 - Verificación de propagación del ID generado por SQLite en `Proyecto`.
 - Verificación de que las consultas de usuarios no expongan contraseñas.
+
+## Cambio 6 - Criterio 2.1.4 de la Unidad 2
+
+**Fecha:** 2026-09-12  
+**Archivo modificado:** `main.py`  
+**Objetivo:** validar los datos de entrada y rechazar estados inválidos del modelo.
+
+### Implementación
+
+Se agregó validación de campos obligatorios, identificadores, correos, fechas, horas trabajadas y credenciales. Las entidades lanzan `ValueError` con mensajes descriptivos cuando reciben datos inválidos.
+
+### Revisión técnica
+
+Las validaciones se incorporaron en `__post_init__()` para que se ejecuten al crear las entidades. Se mantuvieron las relaciones del modelo, el CRUD existente y la abstracción de los exportadores.
+
+### Validación
+
+- Se creó correctamente un empleado, un proyecto y un registro válido.
+- Se rechazó un RUT vacío.
+- Se rechazó un correo sin formato básico válido.
+- Se rechazó una fecha de fin anterior a la fecha de inicio.
+- Se rechazaron horas fuera del rango permitido de 0 a 24.
+- La prueba final mostró `Validaciones 2.1.4 OK`.
