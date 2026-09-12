@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -42,15 +43,35 @@ class Proyecto:
 	registros_tiempo: list[RegistroTiempo] = field(default_factory=list)
 
 
-@dataclass
 class Usuario:
 	"""Representa las credenciales de acceso de un empleado."""
 
-	id_usuario: int
-	nombre_usuario: str
-	contrasena: str
-	activo: bool = True
-	empleado: Empleado | None = None
+	def __init__(
+		self,
+		id_usuario: int,
+		nombre_usuario: str,
+		contrasena: str,
+		activo: bool = True,
+		empleado: Empleado | None = None,
+	) -> None:
+		self.id_usuario = id_usuario
+		self.nombre_usuario = nombre_usuario
+		self._contrasena = contrasena
+		self.activo = activo
+		self.empleado = empleado
+
+	@property
+	def contrasena(self) -> str:
+		"""Permite validar credenciales sin exponer el atributo interno."""
+
+		return self._contrasena
+
+	def actualizar_contrasena(self, nueva_contrasena: str) -> None:
+		"""Actualiza la contraseña a través de una operación controlada."""
+
+		if not nueva_contrasena:
+			raise ValueError("La contraseña no puede estar vacía.")
+		self._contrasena = nueva_contrasena
 
 
 @dataclass
@@ -62,6 +83,50 @@ class RegistroTiempo:
 	horas: float
 	empleado: Empleado
 	proyecto: Proyecto
+
+
+class IExportador(ABC):
+	"""Define el contrato común para generar informes."""
+
+	@abstractmethod
+	def exportar(self, registros: list[RegistroTiempo]) -> str:
+		"""Convierte registros de tiempo a un formato de salida."""
+
+
+class ExportadorPDF(IExportador):
+	"""Genera una representación de texto con formato de informe PDF."""
+
+	def exportar(self, registros: list[RegistroTiempo]) -> str:
+		lineas = ["Informe de horas trabajadas", "=" * 28]
+		lineas.extend(
+			f"{registro.fecha}: {registro.empleado.nombre} "
+			f"- {registro.proyecto.nombre} - {registro.horas} horas"
+			for registro in registros
+		)
+		return "\n".join(lineas)
+
+
+class ExportadorExcel(IExportador):
+	"""Genera datos separados por comas para una hoja de cálculo."""
+
+	def exportar(self, registros: list[RegistroTiempo]) -> str:
+		lineas = ["fecha,empleado,proyecto,horas"]
+		lineas.extend(
+			f"{registro.fecha},{registro.empleado.nombre},"
+			f"{registro.proyecto.nombre},{registro.horas}"
+			for registro in registros
+		)
+		return "\n".join(lineas)
+
+
+class ServicioReportes:
+	"""Usa cualquier exportador compatible sin duplicar la lógica."""
+
+	def __init__(self, exportador: IExportador) -> None:
+		self._exportador = exportador
+
+	def generar(self, registros: list[RegistroTiempo]) -> str:
+		return self._exportador.exportar(registros)
 
 
 def asignar_empleado_a_departamento(

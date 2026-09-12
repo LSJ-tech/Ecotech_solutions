@@ -41,3 +41,26 @@ El documento fue redactado a partir de la guía de aprendizaje, la rúbrica, `um
 ### Validación
 
 Se verificará que el README sea visible desde la carpeta del proyecto, que sus comandos correspondan al estado actual del código y que los criterios pendientes estén diferenciados del criterio 2.1.1 ya validado.
+
+## Cambio 3 - Criterio 2.1.2 de la Unidad 2
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** aplicar encapsulamiento, abstracción, herencia, polimorfismo y reutilización de código.
+
+### Implementación
+
+La clase `Usuario` ahora mantiene la contraseña en `_contrasena` y ofrece la propiedad `contrasena` junto con `actualizar_contrasena()`. La actualización rechaza contraseñas vacías mediante `ValueError`.
+
+También se creó la abstracción `IExportador` con el método `exportar()`. `ExportadorPDF` y `ExportadorExcel` heredan de ella y generan formatos diferentes. `ServicioReportes` recibe cualquier `IExportador`, demostrando polimorfismo y evitando duplicar la lógica de generación.
+
+### Revisión técnica
+
+La implementación se contrastó con el UML y con el criterio 2.1.2 de la rúbrica. Se utilizó IA como apoyo para proponer alternativas de abstracción, pero se conservaron únicamente las estructuras compatibles con las responsabilidades del modelo.
+
+### Validación
+
+- Compilación correcta con `py -3 -m py_compile C:\Python\Ecotech_solutions\main.py`.
+- Prueba funcional completada con el resultado `Prueba 2.1.2 OK`.
+- Verificación de contraseña privada, actualización controlada y rechazo de valores vacíos.
+- Verificación de `ServicioReportes` con `ExportadorPDF` y `ExportadorExcel`.

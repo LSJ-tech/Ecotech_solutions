@@ -40,6 +40,18 @@ También se implementaron las operaciones:
 
 Estas operaciones mantienen las relaciones entre objetos y evitan registrar duplicados en las listas asociadas.
 
+### Criterio 2.1.2: principios de orientación a objetos
+
+**Estado: completado.**
+
+Se incorporaron los siguientes elementos:
+
+- Encapsulamiento de la contraseña de `Usuario` mediante `_contrasena`, una propiedad de lectura y `actualizar_contrasena()`.
+- Abstracción mediante la clase `IExportador` y su método abstracto `exportar()`.
+- Herencia en `ExportadorPDF` y `ExportadorExcel`.
+- Polimorfismo en `ServicioReportes`, que trabaja con cualquier implementación de `IExportador`.
+- Reutilización de la lógica común del servicio sin duplicar el proceso de generación de informes.
+
 ## Correspondencia con el UML
 
 La implementación utiliza `dataclass` para representar las entidades del diagrama y anotaciones de tipo para expresar sus relaciones:
@@ -57,7 +69,7 @@ El diagrama original se encuentra en `uml.png`.
 ```text
 Ecotech_solutions/
 ├── main.py
-├── README.md
+├── Readme.md
 ├── VALIDACION_IA.md
 ├── Rubrica.pdf
 ├── TI3V21_U2_U3_ES02_GUÍA.docx
@@ -93,10 +105,9 @@ Modelo de EcoTechSolutions cargado correctamente.
 
 ## Próximas etapas de la Unidad 2
 
-1. Aplicar encapsulamiento, abstracción y reutilización de código según el criterio 2.1.2.
-2. Integrar una base de datos y operaciones CRUD según el criterio 2.1.3.
-3. Incorporar validaciones y manejo de excepciones según el criterio 2.1.4.
-4. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
+1. Integrar una base de datos y operaciones CRUD según el criterio 2.1.3.
+2. Incorporar validaciones y manejo de excepciones según el criterio 2.1.4.
+3. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
 
 ## Registro de cambios y uso de IA
 
