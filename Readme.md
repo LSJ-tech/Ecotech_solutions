@@ -124,10 +124,29 @@ Desde la carpeta del proyecto:
 py -3 main.py
 ```
 
-La salida esperada es:
+Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tablas y muestra un menú para:
+
+- Crear y listar departamentos, empleados y proyectos.
+- Asignar empleados a proyectos.
+- Registrar horas trabajadas.
+- Consultar registros de tiempo.
+- Crear y listar usuarios asociados a empleados.
+- Solicitar login antes de entrar al menú principal.
+- Registrar usuarios con rol `admin` o `empleado`.
+- Permitir que solo un administrador cambie el rol de otro usuario.
+- Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
+
+Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
+
+En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` se solicita el código temporal `1234`. Los usuarios nuevos se guardan con hash PBKDF2; los usuarios antiguos se migran automáticamente al iniciar sesión.
+
+Actualmente los roles disponibles son `admin` y `empleado`. La opción de cambiar roles es exclusiva del administrador y permite promover o quitar permisos administrativos a otro usuario.
+
+La salida inicial esperada es:
 
 ```text
-Modelo de EcoTechSolutions cargado correctamente.
+Base de datos conectada: ecotech_solutions.db
+=== ECOTECH SOLUTIONS ===
 ```
 
 ## Validaciones realizadas
@@ -141,6 +160,8 @@ Modelo de EcoTechSolutions cargado correctamente.
 - Prueba de registro, consulta, actualización y eliminación de empleados.
 - Prueba de registro, consulta, actualización y eliminación de departamentos, proyectos, usuarios y registros de tiempo.
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
+- Prueba del menú conectado a la base de datos local.
+- Prueba de registro, login, roles y migración de contraseñas.
 
 ## Registro de cambios y uso de IA
 

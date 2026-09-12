@@ -160,3 +160,48 @@ La contraseña de `Usuario` todavía se almacena en texto plano y puede leerse m
 - Se verificó que las mismas actualizaciones ahora lanzan `ValueError`.
 - La prueba mostró `Revisión 2.1.5: validaciones CRUD OK`.
 - `main.py` compiló correctamente con `py -3 -m py_compile main.py`.
+
+## Cambio 8 - Menú conectado a SQLite
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** permitir ejecutar el sistema mediante un menú funcional y persistir los datos en SQLite.
+
+### Implementación
+
+Se agregó un menú de consola que abre `ecotech_solutions.db`, inicializa las tablas y permite crear y consultar departamentos, empleados y proyectos, asignar empleados, registrar horas y generar reportes.
+
+### Validación
+
+- Al ejecutar `py -3 main.py` se creó correctamente `ecotech_solutions.db`.
+- Se probó la salida mediante la opción `0`.
+- Se completó un flujo con departamento, empleado, proyecto, asignación y registro de 4 horas.
+- Se generó correctamente un reporte CSV desde los registros almacenados.
+- La base local permanece excluida del control de versiones mediante `.gitignore`.
+- Se creó y listó un usuario asociado a un empleado sin mostrar su contraseña.
+
+## Cambio 9 - Autenticación y roles
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** proteger el acceso al sistema y separar las funciones administrativas.
+
+### Implementación
+
+Se agregó un acceso inicial con login y registro. El primer usuario puede registrarse como `admin` o `empleado`; el rol `admin` requiere el código temporal `1234`. La tabla `usuarios` incorpora la columna `rol` mediante una migración compatible con bases existentes.
+
+Las contraseñas nuevas se almacenan usando PBKDF2-SHA256 con sal. Las contraseñas antiguas se aceptan durante la migración y se convierten a hash después de un login correcto. Los usuarios inactivos no pueden iniciar sesión.
+
+La gestión de usuarios y la opción de cambiar roles están restringidas al rol `admin`. Los usuarios empleados pueden utilizar las funciones operativas, pero no administrar cuentas.
+
+### Validación
+
+- Se verificó la creación de usuarios con hash, sin guardar la contraseña original.
+- Se verificó login correcto y rechazo de contraseña incorrecta.
+- Se verificó la migración automática de un usuario antiguo en texto plano a PBKDF2.
+- Se verificó la incorporación de la columna `rol` en la base SQLite existente.
+- No se realizó `commit` ni `push`; los cambios permanecen locales.
+
+### Observación de seguridad
+
+El código `1234` es temporal y débil, tal como se solicitó para esta etapa. Debe reemplazarse por una variable de entorno o un mecanismo de configuración segura antes de usar el sistema en producción.
