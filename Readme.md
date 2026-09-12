@@ -136,9 +136,13 @@ Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
 - Registros de tiempo con horas menores o iguales a cero o mayores que 24.
 - Usuarios con nombre o contraseña vacíos.
 
-## Próxima etapa de la Unidad 2
+## Criterio 2.1.5: revisión crítica del código apoyado por IA
 
-1. Revisar y validar críticamente el código apoyado por IA según el criterio 2.1.5.
+**Estado: completado.**
+
+La revisión detectó que algunas operaciones de actualización SQLite podían saltarse las validaciones aplicadas al crear entidades. Se corrigió el problema reutilizando las validaciones de texto, fechas y horas en las operaciones CRUD.
+
+También se documentó como riesgo residual que `Usuario` conserva y expone la contraseña en texto plano mediante su propiedad actual. Para un sistema real debería utilizarse un hash seguro y un método de verificación, pero ese cambio requiere definir primero el flujo de autenticación.
 
 ## Registro de cambios y uso de IA
 

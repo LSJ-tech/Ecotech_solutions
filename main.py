@@ -72,6 +72,14 @@ def validar_texto(valor: str, campo: str) -> str:
 	return valor.strip()
 
 
+def validar_horas(horas: float) -> float:
+	"""Valida el rango permitido para un registro de tiempo."""
+
+	if not isinstance(horas, (int, float)) or not 0 < horas <= 24:
+		raise ValueError("Las horas deben ser mayores que 0 y menores o iguales a 24.")
+	return float(horas)
+
+
 def conectar_bd(
 	db_path: str | Path = DATABASE_PATH,
 ) -> sqlite3.Connection:
@@ -93,6 +101,7 @@ def inicializar_bd(connection: sqlite3.Connection) -> None:
 def guardar_departamento(connection: sqlite3.Connection, nombre: str) -> int:
 	"""Inserta un departamento y devuelve su identificador."""
 
+	nombre = validar_texto(nombre, "El nombre del departamento")
 	cursor = connection.execute(
 		"INSERT INTO departamentos (nombre) VALUES (?)", (nombre,)
 	)
@@ -154,6 +163,12 @@ def actualizar_empleado(
 ) -> bool:
 	"""Actualiza los datos de un empleado y devuelve si existía."""
 
+	nombre = validar_texto(nombre, "El nombre")
+	apellido = validar_texto(apellido, "El apellido")
+	correo = validar_texto(correo, "El correo")
+	cargo = validar_texto(cargo, "El cargo")
+	if "@" not in correo:
+		raise ValueError("El correo debe tener un formato válido.")
 	cursor = connection.execute(
 		"""
 		UPDATE empleados
@@ -211,6 +226,7 @@ def actualizar_departamento(
 ) -> bool:
 	"""Actualiza un departamento y devuelve si existía."""
 
+	nombre = validar_texto(nombre, "El nombre del departamento")
 	cursor = connection.execute(
 		"UPDATE departamentos SET nombre = ? WHERE id_departamento = ?",
 		(nombre, id_departamento),
@@ -253,6 +269,15 @@ def actualizar_proyecto(
 ) -> bool:
 	"""Actualiza un proyecto y devuelve si existía."""
 
+	nombre = validar_texto(nombre, "El nombre del proyecto")
+	descripcion = validar_texto(descripcion, "La descripción")
+	if not isinstance(fecha_inicio, date):
+		raise ValueError("La fecha de inicio debe ser una fecha válida.")
+	if fecha_fin is not None:
+		if not isinstance(fecha_fin, date):
+			raise ValueError("La fecha de fin debe ser una fecha válida.")
+		if fecha_fin < fecha_inicio:
+			raise ValueError("La fecha de fin no puede ser anterior a la fecha de inicio.")
 	cursor = connection.execute(
 		"""
 		UPDATE proyectos
@@ -324,6 +349,7 @@ def actualizar_usuario(
 ) -> bool:
 	"""Actualiza los datos no sensibles de un usuario."""
 
+	nombre_usuario = validar_texto(nombre_usuario, "El nombre de usuario")
 	cursor = connection.execute(
 		"""
 		UPDATE usuarios SET nombre_usuario = ?, activo = ?
@@ -408,6 +434,9 @@ def actualizar_registro_tiempo(
 ) -> bool:
 	"""Actualiza fecha y horas de un registro de tiempo."""
 
+	if not isinstance(fecha, date):
+		raise ValueError("La fecha del registro debe ser una fecha válida.")
+	horas = validar_horas(horas)
 	cursor = connection.execute(
 		"""
 		UPDATE registros_tiempo SET fecha = ?, horas = ?
@@ -540,8 +569,7 @@ class RegistroTiempo:
 			raise ValueError("El identificador del registro no puede ser negativo.")
 		if not isinstance(self.fecha, date):
 			raise ValueError("La fecha del registro debe ser una fecha válida.")
-		if not isinstance(self.horas, (int, float)) or not 0 < self.horas <= 24:
-			raise ValueError("Las horas deben ser mayores que 0 y menores o iguales a 24.")
+		self.horas = validar_horas(self.horas)
 		if not isinstance(self.empleado, Empleado):
 			raise ValueError("El registro debe estar asociado a un empleado válido.")
 		if not isinstance(self.proyecto, Proyecto):

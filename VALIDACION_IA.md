@@ -2,8 +2,8 @@
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
-**Fecha:** 2026-09-12  
-**Archivo modificado:** `main.py`  
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
 **Objetivo:** traducir el modelo UML inicial a clases Python.
 
 ### Implementacion
@@ -139,3 +139,24 @@ Las validaciones se incorporaron en `__post_init__()` para que se ejecuten al cr
 - Se rechazó una fecha de fin anterior a la fecha de inicio.
 - Se rechazaron horas fuera del rango permitido de 0 a 24.
 - La prueba final mostró `Validaciones 2.1.4 OK`.
+
+## Cambio 7 - Criterio 2.1.5 de la Unidad 2
+
+**Fecha:** 2026-09-12  
+**Archivo modificado:** `main.py`  
+**Objetivo:** revisar críticamente el código apoyado por IA y corregir riesgos verificables.
+
+### Hallazgo y corrección
+
+La revisión comprobó que `actualizar_empleado()` y `actualizar_registro_tiempo()` podían guardar datos inválidos directamente en SQLite, aunque las entidades rechazaban esos datos al crearse. Se agregaron validaciones reutilizables para textos, fechas y horas en las operaciones CRUD de actualización.
+
+### Riesgo residual
+
+La contraseña de `Usuario` todavía se almacena en texto plano y puede leerse mediante la propiedad `contrasena`. Esto mantiene la compatibilidad con la implementación académica actual, pero no es adecuado para producción. La mejora recomendada es almacenar un hash seguro y agregar una operación de verificación, antes de implementar autenticación real.
+
+### Validación
+
+- Se reprodujo el defecto: una actualización aceptaba un nombre vacío, un correo inválido y horas superiores a 24.
+- Se verificó que las mismas actualizaciones ahora lanzan `ValueError`.
+- La prueba mostró `Revisión 2.1.5: validaciones CRUD OK`.
+- `main.py` compiló correctamente con `py -3 -m py_compile main.py`.
