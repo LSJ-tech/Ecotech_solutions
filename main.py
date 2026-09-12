@@ -184,7 +184,157 @@ def guardar_proyecto(connection: sqlite3.Connection, proyecto: Proyecto) -> int:
 		),
 	)
 	connection.commit()
-	return int(cursor.lastrowid)
+	proyecto.id_proyecto = int(cursor.lastrowid)
+	return proyecto.id_proyecto
+
+
+def listar_departamentos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+	"""Consulta todos los departamentos almacenados."""
+
+	return list(
+		connection.execute(
+			"SELECT id_departamento, nombre FROM departamentos ORDER BY nombre"
+		)
+	)
+
+
+def actualizar_departamento(
+	connection: sqlite3.Connection, id_departamento: int, nombre: str
+) -> bool:
+	"""Actualiza un departamento y devuelve si existía."""
+
+	cursor = connection.execute(
+		"UPDATE departamentos SET nombre = ? WHERE id_departamento = ?",
+		(nombre, id_departamento),
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def eliminar_departamento(connection: sqlite3.Connection, id_departamento: int) -> bool:
+	"""Elimina un departamento y devuelve si existía."""
+
+	cursor = connection.execute(
+		"DELETE FROM departamentos WHERE id_departamento = ?", (id_departamento,)
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def listar_proyectos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+	"""Consulta todos los proyectos almacenados."""
+
+	return list(
+		connection.execute(
+			"""
+			SELECT id_proyecto, nombre, descripcion, fecha_inicio, fecha_fin
+			FROM proyectos ORDER BY fecha_inicio, nombre
+			"""
+		)
+	)
+
+
+def actualizar_proyecto(
+	connection: sqlite3.Connection,
+	id_proyecto: int,
+	*,
+	nombre: str,
+	descripcion: str,
+	fecha_inicio: date,
+	fecha_fin: date | None = None,
+) -> bool:
+	"""Actualiza un proyecto y devuelve si existía."""
+
+	cursor = connection.execute(
+		"""
+		UPDATE proyectos
+		SET nombre = ?, descripcion = ?, fecha_inicio = ?, fecha_fin = ?
+		WHERE id_proyecto = ?
+		""",
+		(
+			nombre,
+			descripcion,
+			fecha_inicio.isoformat(),
+			fecha_fin.isoformat() if fecha_fin else None,
+			id_proyecto,
+		),
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def eliminar_proyecto(connection: sqlite3.Connection, id_proyecto: int) -> bool:
+	"""Elimina un proyecto y devuelve si existía."""
+
+	cursor = connection.execute(
+		"DELETE FROM proyectos WHERE id_proyecto = ?", (id_proyecto,)
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def guardar_usuario(connection: sqlite3.Connection, usuario: Usuario) -> int:
+	"""Inserta un usuario asociado opcionalmente a un empleado."""
+
+	cursor = connection.execute(
+		"""
+		INSERT INTO usuarios
+		(nombre_usuario, contrasena, activo, rut_empleado)
+		VALUES (?, ?, ?, ?)
+		""",
+		(
+			usuario.nombre_usuario,
+			usuario.contrasena,
+			int(usuario.activo),
+			usuario.empleado.rut if usuario.empleado else None,
+		),
+	)
+	connection.commit()
+	usuario.id_usuario = int(cursor.lastrowid)
+	return usuario.id_usuario
+
+
+def listar_usuarios(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+	"""Consulta los usuarios sin devolver su contraseña."""
+
+	return list(
+		connection.execute(
+			"""
+			SELECT id_usuario, nombre_usuario, activo, rut_empleado
+			FROM usuarios ORDER BY nombre_usuario
+			"""
+		)
+	)
+
+
+def actualizar_usuario(
+	connection: sqlite3.Connection,
+	id_usuario: int,
+	*,
+	nombre_usuario: str,
+	activo: bool,
+) -> bool:
+	"""Actualiza los datos no sensibles de un usuario."""
+
+	cursor = connection.execute(
+		"""
+		UPDATE usuarios SET nombre_usuario = ?, activo = ?
+		WHERE id_usuario = ?
+		""",
+		(nombre_usuario, int(activo), id_usuario),
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def eliminar_usuario(connection: sqlite3.Connection, id_usuario: int) -> bool:
+	"""Elimina un usuario y devuelve si existía."""
+
+	cursor = connection.execute(
+		"DELETE FROM usuarios WHERE id_usuario = ?", (id_usuario,)
+	)
+	connection.commit()
+	return cursor.rowcount == 1
 
 
 def asignar_empleado_proyecto_bd(
@@ -222,6 +372,53 @@ def guardar_registro_tiempo(
 	)
 	connection.commit()
 	return int(cursor.lastrowid)
+
+
+def listar_registros_tiempo(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+	"""Consulta registros de tiempo con sus referencias principales."""
+
+	return list(
+		connection.execute(
+			"""
+			SELECT r.id_registro, r.fecha, r.horas, r.rut_empleado,
+			       r.id_proyecto, e.nombre AS empleado, p.nombre AS proyecto
+			FROM registros_tiempo AS r
+			JOIN empleados AS e ON e.rut = r.rut_empleado
+			JOIN proyectos AS p ON p.id_proyecto = r.id_proyecto
+			ORDER BY r.fecha, r.id_registro
+			"""
+		)
+	)
+
+
+def actualizar_registro_tiempo(
+	connection: sqlite3.Connection,
+	id_registro: int,
+	*,
+	fecha: date,
+	horas: float,
+) -> bool:
+	"""Actualiza fecha y horas de un registro de tiempo."""
+
+	cursor = connection.execute(
+		"""
+		UPDATE registros_tiempo SET fecha = ?, horas = ?
+		WHERE id_registro = ?
+		""",
+		(fecha.isoformat(), horas, id_registro),
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def eliminar_registro_tiempo(connection: sqlite3.Connection, id_registro: int) -> bool:
+	"""Elimina un registro de tiempo y devuelve si existía."""
+
+	cursor = connection.execute(
+		"DELETE FROM registros_tiempo WHERE id_registro = ?", (id_registro,)
+	)
+	connection.commit()
+	return cursor.rowcount == 1
 
 
 @dataclass

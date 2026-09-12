@@ -90,3 +90,29 @@ La estructura de tablas y relaciones se contrastó con `uml.png` y con el requis
 - Verificación de creación del esquema SQLite en memoria.
 - Verificación del CRUD de empleados.
 - Verificación de proyecto, asignación empleado-proyecto y registro de horas.
+
+## Cambio 5 - Cierre del criterio 2.1.3 de la Unidad 2
+
+**Fecha:** 2026-09-12
+**Archivo modificado:** `main.py`
+**Objetivo:** completar el CRUD requerido por la rúbrica para las entidades persistentes del sistema.
+
+### Implementación
+
+Se agregaron operaciones de consulta, actualización y eliminación para departamentos, proyectos, usuarios y registros de tiempo. El CRUD de empleados ya existente se mantuvo y se amplió con las operaciones para todas las entidades principales.
+
+Además, `guardar_proyecto()` ahora actualiza `proyecto.id_proyecto` con el identificador generado por SQLite. Esto garantiza que los registros de tiempo utilicen el ID real de la base de datos y no un valor inicial del objeto.
+
+Las consultas de usuarios no devuelven la columna de contraseña. Las relaciones entre empleado y proyecto se mantienen mediante la tabla intermedia `empleado_proyecto`.
+
+### Revisión técnica
+
+Se revisó que cada operación use consultas parametrizadas y que las operaciones devuelvan un resultado booleano o identificador que permita saber si se ejecutaron sobre una entidad existente. La prueba usa una base SQLite en memoria para no mezclar datos de validación con la base local del proyecto.
+
+### Validación
+
+- Compilación correcta con `py -3 -m py_compile C:\Python\Ecotech_solutions\main.py`.
+- Prueba funcional completada con el resultado `Prueba 2.1.3 CRUD completo OK`.
+- CRUD verificado para departamentos, empleados, proyectos, usuarios y registros de tiempo.
+- Verificación de propagación del ID generado por SQLite en `Proyecto`.
+- Verificación de que las consultas de usuarios no expongan contraseñas.

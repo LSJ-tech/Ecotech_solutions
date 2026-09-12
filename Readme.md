@@ -63,7 +63,7 @@ La implementación incluye:
 - Creación de tablas para departamentos, empleados, proyectos, usuarios y registros de tiempo.
 - Claves foráneas para mantener las relaciones del UML.
 - Tabla intermedia `empleado_proyecto` para la relación muchos a muchos.
-- Operaciones CRUD para empleados: registrar, consultar, actualizar y eliminar.
+- Operaciones CRUD para departamentos, empleados, proyectos, usuarios y registros de tiempo.
 - Persistencia de proyectos, asignaciones y registros de horas.
 - Consultas parametrizadas para separar los datos de las instrucciones SQL.
 
@@ -120,6 +120,7 @@ Modelo de EcoTechSolutions cargado correctamente.
 - Verificación de que las relaciones no agreguen duplicados.
 - Inicialización de un esquema SQLite en una base temporal en memoria.
 - Prueba de registro, consulta, actualización y eliminación de empleados.
+- Prueba de registro, consulta, actualización y eliminación de departamentos, proyectos, usuarios y registros de tiempo.
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
 
 ## Próximas etapas de la Unidad 2
