@@ -1,14 +1,12 @@
 # EcoTechSolutions
 
-## Proyecto de la Unidad 2
+Sistema de gestión de empleados para EcoTechSolutions, desarrollado en Python a partir del modelo UML definido para el proyecto de la Unidad 2.
 
-Sistema de gestión de empleados para la empresa EcoTechSolutions, desarrollado en Python a partir del modelo UML definido para el proyecto.
-
-La Unidad 2 se enfoca en la implementación orientada a objetos, la coherencia entre el diseño UML y el código, la integración posterior con una base de datos, las operaciones CRUD, la validación de datos y el manejo de errores.
+La solución aborda la programación orientada a objetos, la integración con una base de datos, las operaciones CRUD, la validación de datos y el manejo de errores.
 
 ## Objetivo
 
-Construir una solución funcional que permita representar y gestionar:
+Representar y gestionar los siguientes elementos:
 
 - Departamentos.
 - Empleados.
@@ -18,7 +16,37 @@ Construir una solución funcional que permita representar y gestionar:
 
 El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamente y se documenta en `VALIDACION_IA.md`.
 
-## Estado actual
+## Requisitos
+
+- Python 3.10 o superior.
+- No se requieren dependencias externas para la etapa actual.
+- SQLite se utiliza mediante la librería estándar `sqlite3`.
+
+## Estructura del proyecto
+
+```text
+Ecotech_solutions/
+├── main.py
+├── Readme.md
+├── VALIDACION_IA.md
+├── Rubrica.pdf
+├── TI3V21_U2_U3_ES02_GUÍA.docx
+└── uml.png
+```
+
+## Correspondencia con el UML
+
+La implementación utiliza `dataclass` para representar las entidades del diagrama y anotaciones de tipo para expresar sus relaciones:
+
+- Un empleado puede pertenecer a un departamento.
+- Un empleado puede participar en varios proyectos.
+- Un proyecto puede tener varios empleados asignados.
+- Un registro de tiempo pertenece a un empleado y a un proyecto.
+- Un usuario puede estar asociado a un empleado.
+
+El diagrama original se encuentra en `uml.png`.
+
+## Estado de los criterios
 
 ### Criterio 2.1.1: implementación del modelo UML
 
@@ -67,35 +95,26 @@ La implementación incluye:
 - Persistencia de proyectos, asignaciones y registros de horas.
 - Consultas parametrizadas para separar los datos de las instrucciones SQL.
 
-## Correspondencia con el UML
+### Criterio 2.1.4: validaciones y manejo de excepciones
 
-La implementación utiliza `dataclass` para representar las entidades del diagrama y anotaciones de tipo para expresar sus relaciones:
+**Estado: completado.**
 
-- Un empleado puede pertenecer a un departamento.
-- Un empleado puede participar en varios proyectos.
-- Un proyecto puede tener varios empleados asignados.
-- Un registro de tiempo pertenece a un empleado y a un proyecto.
-- Un usuario puede estar asociado a un empleado.
+Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
 
-El diagrama original se encuentra en `uml.png`.
+- Campos de texto obligatorios vacíos.
+- Correos sin un formato básico válido.
+- Identificadores negativos.
+- Fechas de fin anteriores a la fecha de inicio.
+- Registros de tiempo con horas menores o iguales a cero o mayores que 24.
+- Usuarios con nombre o contraseña vacíos.
 
-## Estructura actual
+### Criterio 2.1.5: revisión crítica del código apoyado por IA
 
-```text
-Ecotech_solutions/
-├── main.py
-├── Readme.md
-├── VALIDACION_IA.md
-├── Rubrica.pdf
-├── TI3V21_U2_U3_ES02_GUÍA.docx
-└── uml.png
-```
+**Estado: completado.**
 
-## Requisitos
+La revisión detectó que algunas operaciones de actualización SQLite podían saltarse las validaciones aplicadas al crear entidades. Se corrigió el problema reutilizando las validaciones de texto, fechas y horas en las operaciones CRUD.
 
-- Python 3.10 o superior.
-- No se requieren dependencias externas para la etapa actual.
-- SQLite se utiliza mediante la librería estándar `sqlite3`.
+También se documentó como riesgo residual que `Usuario` conserva y expone la contraseña en texto plano mediante su propiedad actual. Para un sistema real debería utilizarse un hash seguro y un método de verificación, pero ese cambio requiere definir primero el flujo de autenticación.
 
 ## Ejecución
 
@@ -122,27 +141,6 @@ Modelo de EcoTechSolutions cargado correctamente.
 - Prueba de registro, consulta, actualización y eliminación de empleados.
 - Prueba de registro, consulta, actualización y eliminación de departamentos, proyectos, usuarios y registros de tiempo.
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
-
-## Criterio 2.1.4: validaciones y manejo de excepciones
-
-**Estado: completado.**
-
-Las entidades rechazan datos inválidos mediante `ValueError`, incluyendo:
-
-- Campos de texto obligatorios vacíos.
-- Correos sin un formato básico válido.
-- Identificadores negativos.
-- Fechas de fin anteriores a la fecha de inicio.
-- Registros de tiempo con horas menores o iguales a cero o mayores que 24.
-- Usuarios con nombre o contraseña vacíos.
-
-## Criterio 2.1.5: revisión crítica del código apoyado por IA
-
-**Estado: completado.**
-
-La revisión detectó que algunas operaciones de actualización SQLite podían saltarse las validaciones aplicadas al crear entidades. Se corrigió el problema reutilizando las validaciones de texto, fechas y horas en las operaciones CRUD.
-
-También se documentó como riesgo residual que `Usuario` conserva y expone la contraseña en texto plano mediante su propiedad actual. Para un sistema real debería utilizarse un hash seguro y un método de verificación, pero ese cambio requiere definir primero el flujo de autenticación.
 
 ## Registro de cambios y uso de IA
 
