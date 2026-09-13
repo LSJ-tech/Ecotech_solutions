@@ -27,6 +27,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 ```text
 Ecotech_solutions/
 ├── main.py
+├── interfaz.py
 ├── Readme.md
 ├── VALIDACION_IA.md
 ├── Rubrica.pdf
@@ -126,8 +127,10 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 Desde la carpeta del proyecto:
 
 ```powershell
-py -3 main.py
+py -3 interfaz.py
 ```
+
+La interfaz de consola se encuentra separada en `interfaz.py`. El archivo `main.py` expone una API pública de dominio y persistencia mediante `__all__`, y mantiene un lanzador compatible para no romper la ejecución anterior con `py -3 main.py`.
 
 Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tablas y muestra un menú para:
 

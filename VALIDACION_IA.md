@@ -206,6 +206,40 @@ La gestión de usuarios y la opción de cambiar roles están restringidas al rol
 
 El código `1234` es temporal y débil, tal como se solicitó para esta etapa. Debe reemplazarse por una variable de entorno o un mecanismo de configuración segura antes de usar el sistema en producción.
 
+## Cambio 13 - Separacion de la interfaz de consola
+
+**Fecha:** 2026-09-13
+**Archivos creados o modificados:** `interfaz.py`, `main.py`, `Readme.md`
+**Objetivo:** mejorar la separacion de responsabilidades antes de continuar con la Unidad 3.
+
+### Implementacion
+
+Se creo `interfaz.py` como punto de entrada para la interfaz de consola. El nuevo modulo concentra el login, los menus, la lectura de entradas, la presentacion de consultas y las acciones iniciadas por el usuario, reutilizando las entidades y operaciones de `main.py`.
+
+`main.py` mantiene un lanzador compatible que delega en `interfaz.mostrar_menu()`, por lo que continua funcionando el comando anterior mientras el README documenta el nuevo punto de entrada.
+
+### Validacion
+
+- `py -3 -m py_compile main.py interfaz.py` finalizo correctamente.
+- `import interfaz` finalizo correctamente con el resultado `Importacion de interfaz OK`.
+- Se actualizo `Readme.md` con la nueva estructura y el comando de ejecucion.
+- No se realizo commit ni push; los cambios permanecen locales.
+
+## Ajuste arquitectonico - API publica del nucleo
+
+**Fecha:** 2026-09-13
+**Archivo modificado:** `main.py`
+**Objetivo:** definir explicitamente las clases y operaciones que puede reutilizar la interfaz separada.
+
+### Implementacion
+
+Se agrego `__all__` a `main.py` con las entidades, validaciones y operaciones de persistencia que forman la API publica del nucleo. `interfaz.py` importa esas capacidades sin depender de una importacion global del modulo.
+
+### Validacion
+
+- Se comprobo que `main.__all__` contiene las operaciones necesarias para importar `interfaz`.
+- Se mantuvo la compatibilidad del comando `py -3 main.py`.
+
 ## Cambio 12 - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  

@@ -751,6 +751,42 @@ class ServicioReportes:
 		return self._exportador.exportar(registros)
 
 
+__all__ = [
+	"CODIGO_ADMIN",
+	"DATABASE_PATH",
+	"ROLES_VALIDOS",
+	"Departamento",
+	"Empleado",
+	"ExportadorExcel",
+	"ExportadorPDF",
+	"IExportador",
+	"Proyecto",
+	"RegistroTiempo",
+	"ServicioReportes",
+	"Usuario",
+	"asignar_empleado_a_departamento",
+	"asignar_empleado_a_proyecto",
+	"asignar_empleado_proyecto_bd",
+	"conectar_bd",
+	"generar_hash_contrasena",
+	"guardar_departamento",
+	"guardar_empleado",
+	"guardar_proyecto",
+	"guardar_registro_tiempo",
+	"guardar_usuario",
+	"inicializar_bd",
+	"listar_departamentos",
+	"listar_empleados",
+	"listar_proyectos",
+	"listar_registros_tiempo",
+	"listar_usuarios",
+	"validar_horas",
+	"validar_rut",
+	"validar_texto",
+	"verificar_contrasena",
+]
+
+
 def asignar_empleado_a_departamento(
 	empleado: Empleado, departamento: Departamento
 ) -> None:
@@ -1209,4 +1245,6 @@ def mostrar_menu() -> None:
 
 
 if __name__ == "__main__":
+	from interfaz import mostrar_menu
+
 	mostrar_menu()
