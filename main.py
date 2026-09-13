@@ -18,6 +18,7 @@ import sqlite3
 DATABASE_PATH = Path(__file__).with_name("ecotech_solutions.db")
 CODIGO_ADMIN = "1234"
 ROLES_VALIDOS = {"admin", "empleado"}
+CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS departamentos (
@@ -98,7 +99,12 @@ def validar_rut(valor: str) -> str:
 		multiplicador = 2 if multiplicador == 7 else multiplicador + 1
 
 	resto = 11 - (suma % 11)
-	digito_esperado = "0" if resto == 11 else "K" if resto == 10 else str(resto)
+	if resto == 11:
+		digito_esperado = "0"
+	elif resto == 10:
+		digito_esperado = "K"
+	else:
+		digito_esperado = str(resto)
 	if digito != digito_esperado:
 		raise ValueError("El dígito verificador del RUT no es válido.")
 	return f"{int(cuerpo)}-{digito_esperado}"
@@ -186,7 +192,7 @@ def verificar_contrasena(contrasena: str, almacenada: str) -> bool:
 def guardar_departamento(connection: sqlite3.Connection, nombre: str) -> int:
 	"""Inserta un departamento y devuelve su identificador."""
 
-	nombre = validar_texto(nombre, "El nombre del departamento")
+	nombre = validar_texto(nombre, CAMPO_NOMBRE_DEPARTAMENTO)
 	cursor = connection.execute(
 		"INSERT INTO departamentos (nombre) VALUES (?)", (nombre,)
 	)
@@ -318,7 +324,7 @@ def actualizar_departamento(
 ) -> bool:
 	"""Actualiza un departamento y devuelve si existía."""
 
-	nombre = validar_texto(nombre, "El nombre del departamento")
+	nombre = validar_texto(nombre, CAMPO_NOMBRE_DEPARTAMENTO)
 	cursor = connection.execute(
 		"UPDATE departamentos SET nombre = ? WHERE id_departamento = ?",
 		(nombre, id_departamento),
@@ -586,7 +592,7 @@ class Departamento:
 	def __post_init__(self) -> None:
 		if self.id_departamento < 0:
 			raise ValueError("El identificador del departamento no puede ser negativo.")
-		self.nombre = validar_texto(self.nombre, "El nombre del departamento")
+		self.nombre = validar_texto(self.nombre, CAMPO_NOMBRE_DEPARTAMENTO)
 
 
 @dataclass

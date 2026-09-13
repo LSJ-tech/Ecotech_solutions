@@ -171,6 +171,8 @@ Base de datos conectada: ecotech_solutions.db
 - Prueba del menú conectado a la base de datos local.
 - Prueba de registro, login y roles con contraseñas almacenadas mediante PBKDF2.
 - Validación del RUT chileno con normalización, cálculo del dígito verificador y rechazo de formatos inválidos.
+- Cálculo del dígito verificador expresado con ramas `if/elif/else` para facilitar su revisión.
+- Mensaje de validación de departamentos centralizado en una constante para evitar literales duplicados.
 
 ## Registro de cambios y uso de IA
 

@@ -305,6 +305,24 @@ validaciones, servicios, persistencia SQLite y el lanzador compatible.
 - Se comprobó el despacho de la opción de salida del menú usando una base SQLite en memoria.
 - El editor no reportó errores en `main.py` ni `interfaz.py`.
 
+## Cambio 16 - Correcciones de legibilidad detectadas en `main.py`
+
+**Fecha:** 2026-09-13
+**Archivo modificado:** `main.py`
+**Objetivo:** corregir los avisos asociados al ternario anidado y al literal repetido.
+
+### Implementacion
+
+- El cálculo de `digito_esperado` en `validar_rut()` ahora utiliza `if/elif/else`, evitando un ternario anidado.
+- El mensaje `El nombre del departamento` se centralizó en `CAMPO_NOMBRE_DEPARTAMENTO` y se reutiliza en el CRUD y en la entidad.
+
+### Validacion
+
+- `py -3 -m py_compile main.py interfaz.py` finalizó correctamente.
+- Se validó un RUT correcto y su formato normalizado.
+- Se confirmó el rechazo de `12345678-0` por dígito verificador incorrecto.
+- Se comprobó el valor de la constante compartida.
+
 ## Cambio 12 - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  
