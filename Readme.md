@@ -16,6 +16,14 @@ Representar y gestionar los siguientes elementos:
 
 El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamente y se documenta en `VALIDACION_IA.md`.
 
+## Estado actual
+
+- Unidad 2: criterios 2.1.1 a 2.1.5 implementados y validados.
+- Arquitectura: núcleo de dominio y persistencia en `main.py`; interfaz de consola en `interfaz.py`.
+- Seguridad: PBKDF2 para contraseñas y `getpass` para entradas sensibles.
+- Calidad: correcciones aplicadas para duplicidad, literales repetidos y complejidad cognitiva.
+- Unidad 3: pendiente de implementar el consumo seguro de una API externa, autenticación del servicio, validación de respuestas, manejo de errores HTTP y persistencia de datos externos.
+
 ## Requisitos
 
 - Python 3.10 o superior.

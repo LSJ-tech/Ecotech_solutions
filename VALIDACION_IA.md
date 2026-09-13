@@ -1,5 +1,17 @@
 # Validacion de cambios apoyados por IA
 
+## Indice cronologico
+
+1. Cambios 1 a 9: modelo UML, documentación, POO, SQLite, CRUD, validaciones, revisión crítica, menú y autenticación.
+2. Cambio 10: separación de la interfaz de consola.
+3. Cambio 11: API pública del núcleo.
+4. Cambio 12: eliminación de duplicidad entre `main.py` e `interfaz.py`.
+5. Cambio 13: ajustes de seguridad y complejidad señalados por SonarQube.
+6. Cambio 14: correcciones de legibilidad en `main.py`.
+7. Cambio 15: entrada segura de credenciales con `getpass`.
+8. Cambio 16: correcciones S1192 y S3776 en la interfaz.
+9. Material privado: guion de defensa oral, excluido del repositorio.
+
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
 **Fecha:** 2026-09-12
@@ -206,7 +218,7 @@ La gestión de usuarios y la opción de cambiar roles están restringidas al rol
 
 El código `1234` es temporal y débil, tal como se solicitó para esta etapa. Debe reemplazarse por una variable de entorno o un mecanismo de configuración segura antes de usar el sistema en producción.
 
-## Cambio 13 - Separacion de la interfaz de consola
+## Cambio 10 - Separacion de la interfaz de consola
 
 **Fecha:** 2026-09-13
 **Archivos creados o modificados:** `interfaz.py`, `main.py`, `Readme.md`
@@ -225,7 +237,7 @@ Se creo `interfaz.py` como punto de entrada para la interfaz de consola. El nuev
 - Se actualizo `Readme.md` con la nueva estructura y el comando de ejecucion.
 - No se realizo commit ni push; los cambios permanecen locales.
 
-## Ajuste arquitectonico - API publica del nucleo
+## Cambio 11 - API publica del nucleo
 
 **Fecha:** 2026-09-13
 **Archivo modificado:** `main.py`
@@ -259,7 +271,7 @@ separacion arquitectonica, uso responsable de IA y estado real de la Unidad 3.
 - `defensa_oral.py` se agrego a `.git/info/exclude`, por lo que no sera incluido en un commit.
 - No se realizo commit ni push de este material.
 
-## Cambio 14 - Eliminacion de duplicidad de la interfaz
+## Cambio 12 - Eliminacion de duplicidad de la interfaz
 
 **Fecha:** 2026-09-13
 **Archivos modificados:** `main.py`, `Readme.md`
@@ -284,7 +296,7 @@ validaciones, servicios, persistencia SQLite y el lanzador compatible.
 - Se comprobo que `main.py` ya no expone `crear_empleado_menu`.
 - Se debe repetir el analisis de SonarQube para confirmar la desaparicion de la duplicidad.
 
-## Cambio 15 - Ajustes de seguridad y complejidad señalados por SonarQube
+## Cambio 13 - Ajustes de seguridad y complejidad señalados por SonarQube
 
 **Fecha:** 2026-09-13
 **Archivos modificados:** `main.py`, `interfaz.py`, `Readme.md`
@@ -305,7 +317,7 @@ validaciones, servicios, persistencia SQLite y el lanzador compatible.
 - Se comprobó el despacho de la opción de salida del menú usando una base SQLite en memoria.
 - El editor no reportó errores en `main.py` ni `interfaz.py`.
 
-## Cambio 16 - Correcciones de legibilidad detectadas en `main.py`
+## Cambio 14 - Correcciones de legibilidad detectadas en `main.py`
 
 **Fecha:** 2026-09-13
 **Archivo modificado:** `main.py`
@@ -323,7 +335,7 @@ validaciones, servicios, persistencia SQLite y el lanzador compatible.
 - Se confirmó el rechazo de `12345678-0` por dígito verificador incorrecto.
 - Se comprobó el valor de la constante compartida.
 
-## Cambio 17 - Entrada segura de credenciales en consola
+## Cambio 15 - Entrada segura de credenciales en consola
 
 **Fecha:** 2026-09-13
 **Archivo modificado:** `interfaz.py`
@@ -339,7 +351,7 @@ Se incorporó `getpass()` para solicitar la contraseña durante el login, el reg
 - Se comprobó que `interfaz.py` importa `getpass` y lo utiliza en los cuatro puntos sensibles.
 - Se actualizó `Readme.md` con el comportamiento de la consola.
 
-## Cambio 18 - Correcciones S1192 y S3776 en la interfaz
+## Cambio 16 - Correcciones S1192 y S3776 en la interfaz
 
 **Fecha:** 2026-09-13
 **Archivo modificado:** `interfaz.py`
@@ -359,7 +371,7 @@ Se incorporó `getpass()` para solicitar la contraseña durante el login, el reg
 - El editor no reportó errores en ambos módulos.
 - No se realizó commit ni push de este cambio.
 
-## Cambio 12 - Integridad de registros de tiempo en SQLite
+## Anexo histórico A - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  
 **Archivo modificado:** `main.py`  
@@ -383,7 +395,7 @@ Antes de insertar en `registros_tiempo`, `guardar_registro_tiempo()` consulta la
 
 La regla de integridad queda centralizada en la capa de persistencia y se aplica tanto al menú como a las llamadas directas a SQLite.
 
-## Cambio 10 - Revisión crítica 2.1.5: protección de credenciales
+## Anexo histórico B - Revisión crítica 2.1.5: protección de credenciales
 
 **Fecha:** 2026-09-12  
 **Archivo modificado:** `main.py`  
@@ -413,7 +425,7 @@ La corrección se validó con una prueba directa en Python: al instanciar un usu
 - Compilación correcta con `py -3 -m py_compile main.py`.
 - Resultado de la revisión: `Criterio 2.1.5 reforzado con corrección de fuga de credenciales.`
 
-## Cambio 11 - Revisión de validación de RUT
+## Anexo histórico C - Revisión de validación de RUT
 
 **Fecha:** 2026-09-12
 **Archivo modificado:** `main.py`
@@ -435,7 +447,7 @@ Se verificó en el código que `Empleado.__post_init__()` utiliza `validar_texto
 
 La validación avanzada del RUT se mantiene como mejora pendiente.
 
-## Cambio 15 - Validación completa del RUT chileno
+## Anexo histórico D - Validación completa del RUT chileno
 
 **Fecha:** 2026-09-12
 **Archivo modificado:** `main.py`
@@ -459,7 +471,7 @@ La validación se aplica al crear `Empleado`, actualizar o eliminar empleados, a
 
 Los empleados y las relaciones persistidas utilizan únicamente RUTs con formato y dígito verificador válidos.
 
-## Cambio 13 - Manejo de errores y excepciones
+## Anexo histórico E - Manejo de errores y excepciones
 
 **Fecha:** 2026-09-12
 **Archivo modificado:** `main.py`
@@ -482,7 +494,7 @@ También se agregó manejo de errores al abrir o inicializar la base de datos y 
 
 El sistema mantiene la consistencia de las operaciones SQLite ante errores y finaliza de manera controlada cuando la entrada del usuario se interrumpe.
 
-## Cambio 14 - Cobertura completa de errores SQLite en el menú
+## Anexo histórico F - Cobertura completa de errores SQLite en el menú
 
 **Fecha:** 2026-09-12
 **Archivo modificado:** `main.py`
