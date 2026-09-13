@@ -339,6 +339,26 @@ Se incorporó `getpass()` para solicitar la contraseña durante el login, el reg
 - Se comprobó que `interfaz.py` importa `getpass` y lo utiliza en los cuatro puntos sensibles.
 - Se actualizó `Readme.md` con el comportamiento de la consola.
 
+## Cambio 18 - Correcciones S1192 y S3776 en la interfaz
+
+**Fecha:** 2026-09-13
+**Archivo modificado:** `interfaz.py`
+**Objetivo:** corregir literales duplicados y reducir la complejidad cognitiva del inicio de sesión.
+
+### Implementacion
+
+- Se centralizaron el mensaje de contraseña, el mensaje de empleado inexistente y la consulta SQL reutilizada.
+- `iniciar_sesion()` se dividió en `registrar_primer_usuario()`, `mostrar_menu_acceso()` y `procesar_opcion_acceso()`.
+- Se mantuvo la salida con la opción `0`, el registro del primer usuario y el login existente.
+
+### Validacion
+
+- `py -3 -m py_compile interfaz.py main.py` finalizó correctamente.
+- Se comprobó que cada función auxiliar existe una sola vez.
+- Se verificó la carga de la interfaz con SQLite en memoria y el procesamiento de una opción no válida.
+- El editor no reportó errores en ambos módulos.
+- No se realizó commit ni push de este cambio.
+
 ## Cambio 12 - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  

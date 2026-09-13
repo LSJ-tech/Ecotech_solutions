@@ -34,6 +34,13 @@ from main import (
 	verificar_contrasena,
 )
 
+MENSAJE_CONTRASENA = "Contrasena: "
+MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
+CONSULTA_EMPLEADO = (
+	"SELECT rut, nombre, apellido, correo, cargo "
+	"FROM empleados WHERE rut = ?"
+)
+
 
 def leer_entero(mensaje: str, permitir_vacio: bool = False) -> int | None:
 	"""Solicita un numero entero y repite hasta recibir un valor valido."""
@@ -75,7 +82,7 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	"""Registra un usuario y solicita el codigo adicional para ser admin."""
 
 	nombre_usuario = validar_texto(input("Nombre de usuario: "), "El nombre de usuario")
-	contrasena = validar_texto(getpass("Contrasena: "), "La contraseña")
+	contrasena = validar_texto(getpass(MENSAJE_CONTRASENA), "La contraseña")
 	rol = input("Rol (admin/empleado): ").strip().lower()
 	if rol not in ROLES_VALIDOS:
 		raise ValueError("El rol debe ser admin o empleado.")
@@ -88,12 +95,11 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	if rut_empleado:
 		rut_empleado = validar_rut(rut_empleado)
 		empleado_row = connection.execute(
-			"SELECT rut, nombre, apellido, correo, cargo "
-			"FROM empleados WHERE rut = ?",
+			CONSULTA_EMPLEADO,
 			(rut_empleado,),
 		).fetchone()
 		if not empleado_row:
-			raise ValueError("El empleado indicado no existe.")
+			raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
 		empleado = Empleado(*empleado_row)
 
 	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado, rol=rol)
@@ -105,7 +111,7 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 	"""Solicita credenciales y devuelve el usuario autenticado."""
 
 	nombre_usuario = input("Usuario: ").strip()
-	contrasena = getpass("Contrasena: ").strip()
+	contrasena = getpass(MENSAJE_CONTRASENA).strip()
 	fila = connection.execute(
 		"SELECT id_usuario, nombre_usuario, contrasena, activo, rut_empleado, rol "
 		"FROM usuarios WHERE nombre_usuario = ?",
@@ -116,7 +122,6 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 	):
 		print("Usuario, contraseña o estado de cuenta no válidos.")
 		return None
-
 	usuario = Usuario(
 		fila["id_usuario"],
 		fila["nombre_usuario"],
@@ -127,6 +132,40 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 	return usuario
 
 
+def registrar_primer_usuario(connection: sqlite3.Connection) -> None:
+	"""Registra el primer usuario y comunica errores de datos o SQLite."""
+
+	print("No existen usuarios. Debe registrar el primer usuario.")
+	try:
+		registrar_usuario_menu(connection)
+	except (ValueError, sqlite3.IntegrityError) as error:
+		print(f"No se pudo registrar: {error}")
+
+
+def mostrar_menu_acceso() -> str:
+	"""Muestra las opciones de acceso y devuelve la seleccion."""
+
+	print("\n=== ACCESO ECOTECH SOLUTIONS ===")
+	print("1. Iniciar sesion")
+	print("2. Registrar usuario")
+	print("0. Salir")
+	return input("Seleccione una opcion: ").strip()
+
+
+def procesar_opcion_acceso(
+	connection: sqlite3.Connection, opcion: str
+) -> Usuario | None:
+	"""Procesa una opcion de acceso y devuelve el usuario autenticado."""
+
+	if opcion == "1":
+		return autenticar_usuario(connection)
+	if opcion == "2":
+		registrar_usuario_menu(connection)
+		return None
+	print("Opcion no valida.")
+	return None
+
+
 def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 	"""Muestra el acceso inicial antes de abrir el sistema."""
 
@@ -134,30 +173,16 @@ def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 		cantidad_usuarios = connection.execute(
 			"SELECT COUNT(*) FROM usuarios"
 		).fetchone()[0]
-		print("\n=== ACCESO ECOTECH SOLUTIONS ===")
 		if not cantidad_usuarios:
-			print("No existen usuarios. Debe registrar el primer usuario.")
-			try:
-				registrar_usuario_menu(connection)
-			except (ValueError, sqlite3.IntegrityError) as error:
-				print(f"No se pudo registrar: {error}")
-				continue
+			registrar_primer_usuario(connection)
 			continue
-		print("1. Iniciar sesion")
-		print("2. Registrar usuario")
-		print("0. Salir")
-		opcion = input("Seleccione una opcion: ").strip()
+		opcion = mostrar_menu_acceso()
+		if opcion == "0":
+			return None
 		try:
-			if opcion == "1":
-				usuario = autenticar_usuario(connection)
-				if usuario:
-					return usuario
-			elif opcion == "2":
-				registrar_usuario_menu(connection)
-			elif opcion == "0":
-				return None
-			else:
-				print("Opcion no valida.")
+			usuario = procesar_opcion_acceso(connection, opcion)
+			if usuario:
+				return usuario
 		except ValueError as error:
 			print(f"No se pudo completar el acceso: {error}")
 		except sqlite3.Error as error:
@@ -368,7 +393,11 @@ def mostrar_reportes_menu(connection: sqlite3.Connection) -> None:
 		)
 		registros.append(
 			RegistroTiempo(
-				fila["id_registro"], date.fromisoformat(fila["fecha"]), fila["horas"], empleado, proyecto
+				fila["id_registro"],
+				date.fromisoformat(fila["fecha"]),
+				fila["horas"],
+				empleado,
+				proyecto,
 			)
 		)
 	formato = input("Formato (1=PDF texto, 2=Excel CSV): ").strip()

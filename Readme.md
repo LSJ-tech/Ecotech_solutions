@@ -150,6 +150,8 @@ En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol
 
 Las contraseñas y el código secreto se solicitan mediante `getpass`, por lo que no se muestran mientras se escriben en la consola.
 
+La interfaz centraliza mensajes y consultas reutilizadas, y separa el flujo de inicio de sesión en funciones auxiliares para mantener una complejidad cognitiva baja.
+
 Actualmente los roles disponibles son `admin` y `empleado`. La opción de cambiar roles es exclusiva del administrador y permite promover o quitar permisos administrativos a otro usuario.
 
 La salida inicial esperada es:
