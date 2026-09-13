@@ -148,6 +148,8 @@ Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda
 
 En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` se solicita el código temporal `1234`. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
 
+Las contraseñas y el código secreto se solicitan mediante `getpass`, por lo que no se muestran mientras se escriben en la consola.
+
 Actualmente los roles disponibles son `admin` y `empleado`. La opción de cambiar roles es exclusiva del administrador y permite promover o quitar permisos administrativos a otro usuario.
 
 La salida inicial esperada es:

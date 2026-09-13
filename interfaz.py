@@ -1,6 +1,7 @@
 """Interfaz de consola para EcoTechSolutions."""
 
 from datetime import date
+from getpass import getpass
 import sqlite3
 
 from main import (
@@ -74,11 +75,11 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	"""Registra un usuario y solicita el codigo adicional para ser admin."""
 
 	nombre_usuario = validar_texto(input("Nombre de usuario: "), "El nombre de usuario")
-	contrasena = validar_texto(input("Contrasena: "), "La contraseña")
+	contrasena = validar_texto(getpass("Contrasena: "), "La contraseña")
 	rol = input("Rol (admin/empleado): ").strip().lower()
 	if rol not in ROLES_VALIDOS:
 		raise ValueError("El rol debe ser admin o empleado.")
-	if rol == "admin" and input("Codigo secreto de administrador: ").strip() != CODIGO_ADMIN:
+	if rol == "admin" and getpass("Codigo secreto de administrador: ").strip() != CODIGO_ADMIN:
 		raise ValueError("Codigo secreto incorrecto.")
 
 	mostrar_empleados(connection)
@@ -104,7 +105,7 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 	"""Solicita credenciales y devuelve el usuario autenticado."""
 
 	nombre_usuario = input("Usuario: ").strip()
-	contrasena = input("Contrasena: ").strip()
+	contrasena = getpass("Contrasena: ").strip()
 	fila = connection.execute(
 		"SELECT id_usuario, nombre_usuario, contrasena, activo, rut_empleado, rol "
 		"FROM usuarios WHERE nombre_usuario = ?",
@@ -247,7 +248,7 @@ def crear_usuario_menu(connection: sqlite3.Connection) -> None:
 
 	mostrar_empleados(connection)
 	nombre_usuario = input("Nombre de usuario: ")
-	contrasena = input("Contrasena: ")
+	contrasena = getpass("Contrasena: ")
 	rut_empleado = input("RUT del empleado (Enter para dejar sin asignar): ").strip()
 	empleado = None
 	if rut_empleado:

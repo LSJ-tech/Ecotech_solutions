@@ -323,6 +323,22 @@ validaciones, servicios, persistencia SQLite y el lanzador compatible.
 - Se confirmó el rechazo de `12345678-0` por dígito verificador incorrecto.
 - Se comprobó el valor de la constante compartida.
 
+## Cambio 17 - Entrada segura de credenciales en consola
+
+**Fecha:** 2026-09-13
+**Archivo modificado:** `interfaz.py`
+**Objetivo:** evitar que contraseñas y códigos secretos sean visibles durante su ingreso.
+
+### Implementacion
+
+Se incorporó `getpass()` para solicitar la contraseña durante el login, el registro de usuarios, la creación de usuarios y el código secreto del administrador. Los campos no sensibles continúan utilizando `input()`.
+
+### Validacion
+
+- `py -3 -m py_compile main.py interfaz.py` finalizó correctamente.
+- Se comprobó que `interfaz.py` importa `getpass` y lo utiliza en los cuatro puntos sensibles.
+- Se actualizó `Readme.md` con el comportamiento de la consola.
+
 ## Cambio 12 - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  
