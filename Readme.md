@@ -130,7 +130,7 @@ Desde la carpeta del proyecto:
 py -3 interfaz.py
 ```
 
-La interfaz de consola se encuentra separada en `interfaz.py`. El archivo `main.py` expone una API pública de dominio y persistencia mediante `__all__`, y mantiene un lanzador compatible para no romper la ejecución anterior con `py -3 main.py`.
+La interfaz de consola se encuentra separada exclusivamente en `interfaz.py`. El archivo `main.py` expone una API pública de dominio y persistencia mediante `__all__`, y mantiene únicamente un lanzador compatible para no romper la ejecución anterior con `py -3 main.py`.
 
 Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tablas y muestra un menú para:
 
@@ -175,3 +175,9 @@ Base de datos conectada: ecotech_solutions.db
 ## Registro de cambios y uso de IA
 
 `VALIDACION_IA.md` registra cada cambio relevante, las decisiones técnicas, el apoyo utilizado de herramientas de IA y las pruebas realizadas. El código generado o sugerido por IA se revisa y ajusta antes de considerarlo parte de la solución final.
+
+## Material privado de defensa
+
+`defensa_oral.py` contiene un guion de apoyo para la defensa de Maximiliano y Logan.
+Es material local, está excluido mediante `.git/info/exclude` y no forma parte del
+producto que se sube al repositorio.

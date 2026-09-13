@@ -240,6 +240,50 @@ Se agrego `__all__` a `main.py` con las entidades, validaciones y operaciones de
 - Se comprobo que `main.__all__` contiene las operaciones necesarias para importar `interfaz`.
 - Se mantuvo la compatibilidad del comando `py -3 main.py`.
 
+## Material privado - Guion de defensa oral
+
+**Fecha:** 2026-09-13
+**Archivo local:** `defensa_oral.py`
+**Objetivo:** preparar la defensa argumentativa de Maximiliano y Logan sin incorporar el guion al producto publicado.
+
+### Implementacion
+
+Se creo un script independiente con el reparto sugerido, explicaciones del modelo UML,
+principios orientados a objetos, SQLite, CRUD, validaciones, autenticacion, seguridad,
+separacion arquitectonica, uso responsable de IA y estado real de la Unidad 3.
+
+### Validacion
+
+- `py -3 -m py_compile defensa_oral.py` finalizo correctamente.
+- El script se ejecuto y mostro el encabezado y el contenido inicial del guion.
+- `defensa_oral.py` se agrego a `.git/info/exclude`, por lo que no sera incluido en un commit.
+- No se realizo commit ni push de este material.
+
+## Cambio 14 - Eliminacion de duplicidad de la interfaz
+
+**Fecha:** 2026-09-13
+**Archivos modificados:** `main.py`, `Readme.md`
+**Objetivo:** corregir la duplicidad detectada por SonarQube entre el nucleo y la interfaz.
+
+### Hallazgo
+
+`main.py` y `interfaz.py` contenian dos implementaciones de las mismas funciones de consola,
+incluyendo login, menus, lectura de entradas y reportes. Esto aumentaba el mantenimiento y
+provocaba el reporte de codigo duplicado en SonarQube.
+
+### Implementacion
+
+Se eliminaron de `main.py` las funciones de interfaz duplicadas. `interfaz.py` queda como
+unico modulo responsable de la consola, mientras `main.py` conserva las entidades,
+validaciones, servicios, persistencia SQLite y el lanzador compatible.
+
+### Validacion
+
+- `py -3 -m py_compile main.py interfaz.py` finalizo correctamente.
+- `import main` e `import interfaz` finalizaron correctamente.
+- Se comprobo que `main.py` ya no expone `crear_empleado_menu`.
+- Se debe repetir el analisis de SonarQube para confirmar la desaparicion de la duplicidad.
+
 ## Cambio 12 - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  
