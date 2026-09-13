@@ -284,6 +284,27 @@ validaciones, servicios, persistencia SQLite y el lanzador compatible.
 - Se comprobo que `main.py` ya no expone `crear_empleado_menu`.
 - Se debe repetir el analisis de SonarQube para confirmar la desaparicion de la duplicidad.
 
+## Cambio 15 - Ajustes de seguridad y complejidad señalados por SonarQube
+
+**Fecha:** 2026-09-13
+**Archivos modificados:** `main.py`, `interfaz.py`, `Readme.md`
+**Objetivo:** aplicar los hallazgos de seguridad y mantenibilidad, excepto el código temporal `1234` solicitado para el administrador inicial.
+
+### Implementacion
+
+- `verificar_contrasena()` ahora acepta exclusivamente hashes PBKDF2; se elimina la comparación y migración de contraseñas almacenadas en texto plano.
+- La autenticación ya no escribe directamente en `usuario._contrasena` después del login.
+- El menú se dividió en `ejecutar_opcion_menu()`, `mostrar_opciones_menu()` y funciones específicas de permisos y registros.
+- El manejo de errores del acceso y del menú separa `ValueError`, `PermissionError` y `sqlite3.Error`.
+- Se mantuvo `CODIGO_ADMIN = "1234"` sin cambios por decisión explícita para esta etapa.
+
+### Validacion
+
+- `py -3 -m py_compile main.py interfaz.py` finalizó correctamente.
+- Se comprobó que un hash PBKDF2 válido autentica y que una contraseña en texto plano se rechaza.
+- Se comprobó el despacho de la opción de salida del menú usando una base SQLite en memoria.
+- El editor no reportó errores en `main.py` ni `interfaz.py`.
+
 ## Cambio 12 - Integridad de registros de tiempo en SQLite
 
 **Fecha:** 2026-09-12  

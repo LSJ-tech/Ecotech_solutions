@@ -16,7 +16,6 @@ from main import (
 	Usuario,
 	asignar_empleado_proyecto_bd,
 	conectar_bd,
-	generar_hash_contrasena,
 	guardar_departamento,
 	guardar_empleado,
 	guardar_proyecto,
@@ -117,12 +116,6 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 		print("Usuario, contraseña o estado de cuenta no válidos.")
 		return None
 
-	if not fila["contrasena"].startswith("pbkdf2_sha256$"):
-		connection.execute(
-			"UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?",
-			(generar_hash_contrasena(contrasena), fila["id_usuario"]),
-		)
-		connection.commit()
 	usuario = Usuario(
 		fila["id_usuario"],
 		fila["nombre_usuario"],
@@ -130,7 +123,6 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 		bool(fila["activo"]),
 		rol=fila["rol"] or "empleado",
 	)
-	usuario._contrasena = contrasena
 	return usuario
 
 
@@ -165,7 +157,9 @@ def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 				return None
 			else:
 				print("Opcion no valida.")
-		except (ValueError, sqlite3.Error) as error:
+		except ValueError as error:
+			print(f"No se pudo completar el acceso: {error}")
+		except sqlite3.Error as error:
 			print(f"No se pudo completar el acceso: {error}")
 
 
@@ -381,6 +375,86 @@ def mostrar_reportes_menu(connection: sqlite3.Connection) -> None:
 	print("\n" + ServicioReportes(exportador).generar(registros))
 
 
+def crear_usuario_admin_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Crea un usuario verificando los permisos administrativos."""
+
+	if usuario_actual.rol != "admin":
+		raise PermissionError("Solo un administrador puede crear usuarios desde el menu.")
+	crear_usuario_menu(connection)
+
+
+def listar_usuarios_admin_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Lista usuarios verificando los permisos administrativos."""
+
+	if usuario_actual.rol != "admin":
+		raise PermissionError("Solo un administrador puede listar usuarios.")
+	mostrar_usuarios(connection)
+
+
+def mostrar_registros_tiempo_menu(connection: sqlite3.Connection) -> None:
+	"""Muestra los registros de tiempo almacenados."""
+
+	for registro in listar_registros_tiempo(connection):
+		print(dict(registro))
+
+
+def ejecutar_opcion_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario, opcion: str
+) -> bool:
+	"""Ejecuta una opcion del menu y devuelve si debe continuar."""
+
+	acciones = {
+		"1": lambda: crear_departamento_menu(connection),
+		"2": lambda: mostrar_departamentos(connection),
+		"3": lambda: crear_empleado_menu(connection),
+		"4": lambda: mostrar_empleados(connection),
+		"5": lambda: crear_proyecto_menu(connection),
+		"6": lambda: mostrar_proyectos(connection),
+		"7": lambda: asignar_proyecto_menu(connection),
+		"8": lambda: registrar_tiempo_menu(connection),
+		"9": lambda: mostrar_registros_tiempo_menu(connection),
+		"10": lambda: mostrar_reportes_menu(connection),
+		"11": lambda: crear_usuario_admin_menu(connection, usuario_actual),
+		"12": lambda: listar_usuarios_admin_menu(connection, usuario_actual),
+		"13": lambda: cambiar_rol_menu(connection, usuario_actual),
+	}
+	if opcion == "0":
+		print("Sesion finalizada.")
+		return False
+	accion = acciones.get(opcion)
+	if accion is None:
+		print("Opcion no valida.")
+		return True
+	accion()
+	return True
+
+
+def mostrar_opciones_menu() -> None:
+	"""Muestra las opciones disponibles del sistema."""
+
+	print(
+		"\n=== ECOTECH SOLUTIONS ===\n"
+		"1. Crear departamento\n"
+		"2. Listar departamentos\n"
+		"3. Crear empleado\n"
+		"4. Listar empleados\n"
+		"5. Crear proyecto\n"
+		"6. Listar proyectos\n"
+		"7. Asignar empleado a proyecto\n"
+		"8. Registrar horas trabajadas\n"
+		"9. Ver registros de tiempo\n"
+		"10. Generar reporte\n"
+		"11. Crear usuario\n"
+		"12. Listar usuarios\n"
+		"13. Cambiar rol de usuario (solo admin)\n"
+		"0. Salir"
+	)
+
+
 def mostrar_menu() -> None:
 	"""Ejecuta el menu principal conectado a la base de datos local."""
 
@@ -401,62 +475,16 @@ def mostrar_menu() -> None:
 		)
 		print(f"Base de datos conectada: {DATABASE_PATH.name}")
 		while True:
-			print(
-				"\n=== ECOTECH SOLUTIONS ===\n"
-				"1. Crear departamento\n"
-				"2. Listar departamentos\n"
-				"3. Crear empleado\n"
-				"4. Listar empleados\n"
-				"5. Crear proyecto\n"
-				"6. Listar proyectos\n"
-				"7. Asignar empleado a proyecto\n"
-				"8. Registrar horas trabajadas\n"
-				"9. Ver registros de tiempo\n"
-				"10. Generar reporte\n"
-				"11. Crear usuario\n"
-				"12. Listar usuarios\n"
-				"13. Cambiar rol de usuario (solo admin)\n"
-				"0. Salir"
-			)
+			mostrar_opciones_menu()
 			opcion = input("Seleccione una opcion: ").strip()
 			try:
-				if opcion == "1":
-					crear_departamento_menu(connection)
-				elif opcion == "2":
-					mostrar_departamentos(connection)
-				elif opcion == "3":
-					crear_empleado_menu(connection)
-				elif opcion == "4":
-					mostrar_empleados(connection)
-				elif opcion == "5":
-					crear_proyecto_menu(connection)
-				elif opcion == "6":
-					mostrar_proyectos(connection)
-				elif opcion == "7":
-					asignar_proyecto_menu(connection)
-				elif opcion == "8":
-					registrar_tiempo_menu(connection)
-				elif opcion == "9":
-					for registro in listar_registros_tiempo(connection):
-						print(dict(registro))
-				elif opcion == "10":
-					mostrar_reportes_menu(connection)
-				elif opcion == "11":
-					if usuario_actual.rol != "admin":
-						raise PermissionError("Solo un administrador puede crear usuarios desde el menu.")
-					crear_usuario_menu(connection)
-				elif opcion == "12":
-					if usuario_actual.rol != "admin":
-						raise PermissionError("Solo un administrador puede listar usuarios.")
-					mostrar_usuarios(connection)
-				elif opcion == "13":
-					cambiar_rol_menu(connection, usuario_actual)
-				elif opcion == "0":
-					print("Sesion finalizada.")
+				if not ejecutar_opcion_menu(connection, usuario_actual, opcion):
 					break
-				else:
-					print("Opcion no valida.")
-			except (ValueError, PermissionError, sqlite3.Error) as error:
+			except ValueError as error:
+				print(f"No se pudo completar la operacion: {error}")
+			except PermissionError as error:
+				print(f"No se pudo completar la operacion: {error}")
+			except sqlite3.Error as error:
 				print(f"No se pudo completar la operacion: {error}")
 	except (EOFError, KeyboardInterrupt):
 		print("\nSesion finalizada por el usuario.")

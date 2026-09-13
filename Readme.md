@@ -146,7 +146,7 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
-En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` se solicita el código temporal `1234`. Los usuarios nuevos se guardan con hash PBKDF2; los usuarios antiguos se migran automáticamente al iniciar sesión.
+En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` se solicita el código temporal `1234`. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
 
 Actualmente los roles disponibles son `admin` y `empleado`. La opción de cambiar roles es exclusiva del administrador y permite promover o quitar permisos administrativos a otro usuario.
 
@@ -169,7 +169,7 @@ Base de datos conectada: ecotech_solutions.db
 - Prueba de registro, consulta, actualización y eliminación de departamentos, proyectos, usuarios y registros de tiempo.
 - Prueba de persistencia de proyectos, asignaciones y registros de tiempo.
 - Prueba del menú conectado a la base de datos local.
-- Prueba de registro, login, roles y migración de contraseñas.
+- Prueba de registro, login y roles con contraseñas almacenadas mediante PBKDF2.
 - Validación del RUT chileno con normalización, cálculo del dígito verificador y rechazo de formatos inválidos.
 
 ## Registro de cambios y uso de IA

@@ -165,12 +165,12 @@ def generar_hash_contrasena(contrasena: str) -> str:
 
 
 def verificar_contrasena(contrasena: str, almacenada: str) -> bool:
-	"""Verifica hashes nuevos y permite migrar usuarios antiguos en texto plano."""
+	"""Verifica una contraseña almacenada como hash PBKDF2."""
 
 	if not almacenada.startswith("pbkdf2_sha256$"):
-		return hmac.compare_digest(contrasena, almacenada)
+		return False
 	try:
-		algoritmo, iteraciones, sal_hex, hash_hex = almacenada.split("$", 3)
+		_algoritmo, iteraciones, sal_hex, hash_hex = almacenada.split("$", 3)
 		hash_calculado = hashlib.pbkdf2_hmac(
 			"sha256",
 			contrasena.encode("utf-8"),
