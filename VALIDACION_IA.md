@@ -629,3 +629,27 @@ Todas las tablas quedaron con cero registros y la base pudo inicializarse nuevam
 - Se confirmó que la asignación correspondiente desaparece de `empleado_proyecto`.
 - Se confirmó que el proyecto permanece en `proyectos` y puede reutilizarse.
 - La prueba SQLite en memoria finalizó correctamente con el mensaje `OK: el proyecto permanece y se elimina solo la asignacion del empleado`.
+
+## Cambio 24 - Validación interactiva de datos de usuario
+
+**Fecha:** 2026-09-16
+**Archivo modificado:** `interfaz.py`
+**Objetivo:** mejorar la experiencia de registro evitando reiniciar el formulario ante un dato inválido.
+
+### Implementación
+
+Se agregaron lectores que repiten únicamente el campo incorrecto para contraseñas, roles,
+correo, nombre, apellidos, cargo y RUT opcional. El RUT obligatorio continúa utilizando
+su validación de formato y dígito verificador sin solicitar nuevamente los datos ya aceptados.
+
+Además, nombres y apellidos ahora aceptan solo letras y espacios, incluidos caracteres
+acentuados, y rechazan números o símbolos con un mensaje explicativo.
+
+### Validación
+
+- `py -3 -m py_compile interfaz.py main.py` finalizó correctamente.
+- Se simularon entradas vacías, correos sin `@` y RUTs con formato inválido.
+- Se comprobó que cada error vuelve a solicitar solo el campo correspondiente.
+- Se comprobó que `Ana2`, `Pérez!` y `Lopez-2` son rechazados.
+- Se comprobó que `Ana Maria`, `Pérez` y `López` son aceptados.
+- El editor no reportó errores en `interfaz.py`.

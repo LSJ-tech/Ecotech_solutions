@@ -77,12 +77,57 @@ def leer_fecha(mensaje: str, permitir_vacio: bool = False) -> date | None:
 			print("Ingrese una fecha valida con formato YYYY-MM-DD.")
 
 
+def leer_texto(mensaje: str, campo: str) -> str:
+	"""Solicita texto obligatorio y repite solo el campo incorrecto."""
+
+	while True:
+		try:
+			return validar_texto(input(mensaje), campo)
+		except ValueError as error:
+			print(error)
+
+
+def leer_nombre(mensaje: str, campo: str) -> str:
+	"""Solicita un nombre compuesto solo por letras y espacios."""
+
+	while True:
+		valor = leer_texto(mensaje, campo)
+		if all(caracter.isalpha() or caracter.isspace() for caracter in valor):
+			return valor
+		print(f"{campo} solo puede contener letras y espacios.")
+
+
 def leer_rut(mensaje: str = "RUT (ejemplo: 19616711-0): ") -> str:
 	"""Solicita un RUT y lo valida antes de continuar."""
 
 	while True:
 		try:
 			return validar_rut(input(mensaje))
+		except ValueError as error:
+			print(error)
+
+
+def leer_rut_opcional(
+	mensaje: str = "RUT del empleado (Enter para dejar sin asignar): "
+) -> str | None:
+	"""Solicita un RUT opcional y repite solo si su formato es inválido."""
+
+	while True:
+		valor = input(mensaje).strip()
+		if not valor:
+			return None
+		try:
+			return validar_rut(valor)
+		except ValueError as error:
+			print(error)
+
+
+def leer_contrasena_validada(mensaje: str = MENSAJE_CONTRASENA) -> str:
+	"""Solicita una contraseña no vacía y conserva el resto del formulario."""
+
+	while True:
+		try:
+			return validar_texto(leer_contrasena(mensaje), "La contraseña")
 		except ValueError as error:
 			print(error)
 
@@ -115,6 +160,26 @@ def normalizar_rol(valor: str) -> str:
 	"""Normaliza el nombre del rol RR.HH. para guardarlo como rrhh."""
 
 	return valor.strip().lower().replace(".", "").replace(":", "")
+
+
+def leer_rol() -> str:
+	"""Solicita un rol válido y explica las opciones permitidas."""
+
+	while True:
+		rol = normalizar_rol(input("Rol (admin/empleado/rrhh): "))
+		if rol in ROLES_VALIDOS:
+			return rol
+		print("El rol debe ser admin, empleado o rrhh.")
+
+
+def leer_correo() -> str:
+	"""Solicita un correo con un formato básico válido."""
+
+	while True:
+		correo = leer_texto("Correo: ", "El correo")
+		if "@" in correo:
+			return correo
+		print("El correo debe tener un formato válido, por ejemplo nombre@dominio.cl.")
 
 
 def generar_nombre_usuario(
@@ -154,19 +219,19 @@ def leer_horas() -> float:
 def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	"""Registra un usuario y solicita el codigo adicional para ser admin."""
 
-	contrasena = validar_texto(leer_contrasena(MENSAJE_CONTRASENA), "La contraseña")
-	rol = normalizar_rol(input("Rol (admin/empleado/rrhh): "))
-	if rol not in ROLES_VALIDOS:
-		raise ValueError("El rol debe ser admin, empleado o rrhh.")
+	contrasena = leer_contrasena_validada()
+	rol = leer_rol()
 	if rol in {"admin", "rrhh"}:
 		codigo_esperado = CODIGO_ADMIN if rol == "admin" else CODIGO_RRHH
-		codigo = leer_contrasena("Codigo secreto: ").strip()
-		if codigo != codigo_esperado:
-			raise ValueError("Codigo secreto incorrecto.")
+		while True:
+			codigo = leer_contrasena_validada("Codigo secreto: ")
+			if codigo == codigo_esperado:
+				break
+			print("Codigo secreto incorrecto. Intente nuevamente.")
 
-	nombre = input("Nombre: ")
-	primer_apellido = input("Primer apellido: ")
-	segundo_apellido = input("Segundo apellido: ")
+	nombre = leer_nombre("Nombre: ", "El nombre")
+	primer_apellido = leer_nombre("Primer apellido: ", "El primer apellido")
+	segundo_apellido = leer_nombre("Segundo apellido: ", "El segundo apellido")
 	nombre_usuario = generar_nombre_usuario(
 		connection, nombre, primer_apellido, segundo_apellido
 	)
@@ -177,8 +242,8 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 			rut_empleado,
 			nombre,
 			f"{primer_apellido} {segundo_apellido}",
-			input("Correo: "),
-			input("Cargo: "),
+			leer_correo(),
+			leer_texto("Cargo: ", "El cargo"),
 		)
 
 	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado, rol=rol)
@@ -371,12 +436,11 @@ def crear_usuario_menu(connection: sqlite3.Connection) -> None:
 	"""Crea un usuario desde el menu."""
 
 	mostrar_empleados(connection)
-	nombre_usuario = input("Nombre de usuario: ")
-	contrasena = leer_contrasena("Contrasena: ")
-	rut_empleado = input("RUT del empleado (Enter para dejar sin asignar): ").strip()
+	nombre_usuario = leer_texto("Nombre de usuario: ", "El nombre de usuario")
+	contrasena = leer_contrasena_validada("Contrasena: ")
+	rut_empleado = leer_rut_opcional()
 	empleado = None
 	if rut_empleado:
-		rut_empleado = validar_rut(rut_empleado)
 		empleado_row = connection.execute(
 			"SELECT rut, nombre, apellido, correo, cargo "
 			"FROM empleados WHERE rut = ?",
