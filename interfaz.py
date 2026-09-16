@@ -3,9 +3,14 @@
 from datetime import date
 from getpass import getpass
 import sqlite3
+import sys
+
+if sys.platform == "win32":
+	import msvcrt
 
 from main import (
 	CODIGO_ADMIN,
+	CODIGO_RRHH,
 	DATABASE_PATH,
 	ROLES_VALIDOS,
 	Empleado,
@@ -16,12 +21,15 @@ from main import (
 	ServicioReportes,
 	Usuario,
 	asignar_empleado_proyecto_bd,
+	asignar_empleado_departamento_bd,
 	conectar_bd,
 	guardar_departamento,
 	guardar_empleado,
 	guardar_proyecto,
 	guardar_registro_tiempo,
 	guardar_usuario,
+	guardar_usuario_con_empleado,
+	eliminar_usuario,
 	inicializar_bd,
 	listar_departamentos,
 	listar_empleados,
@@ -36,6 +44,7 @@ from main import (
 
 MENSAJE_CONTRASENA = "Contrasena: "
 MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
+ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = (
 	"SELECT rut, nombre, apellido, correo, cargo "
 	"FROM empleados WHERE rut = ?"
@@ -68,6 +77,70 @@ def leer_fecha(mensaje: str, permitir_vacio: bool = False) -> date | None:
 			print("Ingrese una fecha valida con formato YYYY-MM-DD.")
 
 
+def leer_rut(mensaje: str = "RUT (ejemplo: 19616711-0): ") -> str:
+	"""Solicita un RUT y lo valida antes de continuar."""
+
+	while True:
+		try:
+			return validar_rut(input(mensaje))
+		except ValueError as error:
+			print(error)
+
+
+def leer_contrasena(mensaje: str) -> str:
+	"""Lee una contraseña mostrando un asterisco por cada carácter."""
+
+	if sys.platform != "win32":
+		return getpass(mensaje)
+	print(mensaje, end="", flush=True)
+	caracteres = []
+	while True:
+		caracter = msvcrt.getwch()
+		if caracter in ("\r", "\n"):
+			print()
+			return "".join(caracteres)
+		if caracter == "\003":
+			raise KeyboardInterrupt
+		if caracter == "\b":
+			if caracteres:
+				caracteres.pop()
+				print("\b \b", end="", flush=True)
+			continue
+		if caracter >= " ":
+			caracteres.append(caracter)
+			print("*", end="", flush=True)
+
+
+def normalizar_rol(valor: str) -> str:
+	"""Normaliza el nombre del rol RR.HH. para guardarlo como rrhh."""
+
+	return valor.strip().lower().replace(".", "").replace(":", "")
+
+
+def generar_nombre_usuario(
+	connection: sqlite3.Connection,
+	nombre: str,
+	primer_apellido: str,
+	segundo_apellido: str,
+) -> str:
+	"""Genera un usuario con la inicial del nombre y un apellido."""
+
+	nombre = validar_texto(nombre, "El nombre").lower()
+	primer_apellido = validar_texto(primer_apellido, "El primer apellido").lower()
+	segundo_apellido = validar_texto(segundo_apellido, "El segundo apellido").lower()
+	usuarios = {
+		fila[0]
+		for fila in connection.execute("SELECT nombre_usuario FROM usuarios")
+	}
+	base = f"{nombre[0]}{primer_apellido}"
+	if base not in usuarios:
+		return base
+	segundo_usuario = f"{nombre[0]}{segundo_apellido}"
+	if segundo_usuario not in usuarios:
+		return segundo_usuario
+	raise ValueError("Ya existen usuarios con ambos apellidos. Use otro nombre o apellido.")
+
+
 def leer_horas() -> float:
 	"""Solicita una cantidad de horas valida."""
 
@@ -81,37 +154,46 @@ def leer_horas() -> float:
 def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	"""Registra un usuario y solicita el codigo adicional para ser admin."""
 
-	nombre_usuario = validar_texto(input("Nombre de usuario: "), "El nombre de usuario")
-	contrasena = validar_texto(getpass(MENSAJE_CONTRASENA), "La contraseña")
-	rol = input("Rol (admin/empleado): ").strip().lower()
+	contrasena = validar_texto(leer_contrasena(MENSAJE_CONTRASENA), "La contraseña")
+	rol = normalizar_rol(input("Rol (admin/empleado/rrhh): "))
 	if rol not in ROLES_VALIDOS:
-		raise ValueError("El rol debe ser admin o empleado.")
-	if rol == "admin" and getpass("Codigo secreto de administrador: ").strip() != CODIGO_ADMIN:
-		raise ValueError("Codigo secreto incorrecto.")
+		raise ValueError("El rol debe ser admin, empleado o rrhh.")
+	if rol in {"admin", "rrhh"}:
+		codigo_esperado = CODIGO_ADMIN if rol == "admin" else CODIGO_RRHH
+		codigo = leer_contrasena("Codigo secreto: ").strip()
+		if codigo != codigo_esperado:
+			raise ValueError("Codigo secreto incorrecto.")
 
-	mostrar_empleados(connection)
-	rut_empleado = input("RUT del empleado (Enter si no corresponde): ").strip()
+	nombre = input("Nombre: ")
+	primer_apellido = input("Primer apellido: ")
+	segundo_apellido = input("Segundo apellido: ")
+	nombre_usuario = generar_nombre_usuario(
+		connection, nombre, primer_apellido, segundo_apellido
+	)
 	empleado = None
-	if rut_empleado:
-		rut_empleado = validar_rut(rut_empleado)
-		empleado_row = connection.execute(
-			CONSULTA_EMPLEADO,
-			(rut_empleado,),
-		).fetchone()
-		if not empleado_row:
-			raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
-		empleado = Empleado(*empleado_row)
+	if rol in {"empleado", "rrhh"}:
+		rut_empleado = leer_rut()
+		empleado = Empleado(
+			rut_empleado,
+			nombre,
+			f"{primer_apellido} {segundo_apellido}",
+			input("Correo: "),
+			input("Cargo: "),
+		)
 
 	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado, rol=rol)
-	guardar_usuario(connection, usuario)
-	print("Usuario registrado correctamente.")
+	if empleado:
+		guardar_usuario_con_empleado(connection, usuario, empleado)
+	else:
+		guardar_usuario(connection, usuario)
+	print(f"Usuario registrado correctamente. Su usuario es: {nombre_usuario}")
 
 
 def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 	"""Solicita credenciales y devuelve el usuario autenticado."""
 
 	nombre_usuario = input("Usuario: ").strip()
-	contrasena = getpass(MENSAJE_CONTRASENA).strip()
+	contrasena = leer_contrasena(MENSAJE_CONTRASENA).strip()
 	fila = connection.execute(
 		"SELECT id_usuario, nombre_usuario, contrasena, activo, rut_empleado, rol "
 		"FROM usuarios WHERE nombre_usuario = ?",
@@ -122,11 +204,17 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 	):
 		print("Usuario, contraseña o estado de cuenta no válidos.")
 		return None
+	empleado_row = (
+		connection.execute(CONSULTA_EMPLEADO, (fila["rut_empleado"],)).fetchone()
+		if fila["rut_empleado"]
+		else None
+	)
 	usuario = Usuario(
 		fila["id_usuario"],
 		fila["nombre_usuario"],
 		"********",
 		bool(fila["activo"]),
+		empleado=Empleado(*empleado_row) if empleado_row else None,
 		rol=fila["rol"] or "empleado",
 	)
 	return usuario
@@ -174,12 +262,14 @@ def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 			"SELECT COUNT(*) FROM usuarios"
 		).fetchone()[0]
 		if not cantidad_usuarios:
-			registrar_primer_usuario(connection)
-			continue
+			print("No existen usuarios. Seleccione 'Registrar usuario' para crear el primero.")
 		opcion = mostrar_menu_acceso()
 		if opcion == "0":
 			return None
 		try:
+			if opcion == "2" and not cantidad_usuarios:
+				registrar_primer_usuario(connection)
+				continue
 			usuario = procesar_opcion_acceso(connection, opcion)
 			if usuario:
 				return usuario
@@ -255,9 +345,18 @@ def cambiar_rol_menu(connection: sqlite3.Connection, usuario_actual: Usuario) ->
 	id_usuario = leer_entero("ID del usuario: ")
 	if id_usuario == usuario_actual.id_usuario:
 		raise ValueError("No puede cambiar su propio rol desde esta opcion.")
-	nuevo_rol = validar_texto(input("Nuevo rol (admin/empleado): "), "El rol").lower()
+	nuevo_rol = normalizar_rol(
+		validar_texto(input("Nuevo rol (admin/empleado/rrhh): "), "El rol")
+	)
 	if nuevo_rol not in ROLES_VALIDOS:
-		raise ValueError("El rol debe ser admin o empleado.")
+		raise ValueError("El rol debe ser admin, empleado o rrhh.")
+	if nuevo_rol == "rrhh":
+		rut_empleado = connection.execute(
+			"SELECT rut_empleado FROM usuarios WHERE id_usuario = ?",
+			(id_usuario,),
+		).fetchone()
+		if not rut_empleado or not rut_empleado[0]:
+			raise ValueError("El rol rrhh debe estar asociado a un empleado.")
 	cursor = connection.execute(
 		"UPDATE usuarios SET rol = ? WHERE id_usuario = ?",
 		(nuevo_rol, id_usuario),
@@ -273,7 +372,7 @@ def crear_usuario_menu(connection: sqlite3.Connection) -> None:
 
 	mostrar_empleados(connection)
 	nombre_usuario = input("Nombre de usuario: ")
-	contrasena = getpass("Contrasena: ")
+	contrasena = leer_contrasena("Contrasena: ")
 	rut_empleado = input("RUT del empleado (Enter para dejar sin asignar): ").strip()
 	empleado = None
 	if rut_empleado:
@@ -298,22 +397,79 @@ def crear_departamento_menu(connection: sqlite3.Connection) -> None:
 	print(f"Departamento creado con ID {id_departamento}.")
 
 
-def crear_empleado_menu(connection: sqlite3.Connection) -> None:
-	"""Crea un empleado desde el menu."""
+def actualizar_departamento_empleado_menu(
+	connection: sqlite3.Connection, cambiar: bool
+) -> None:
+	"""Asigna o cambia el departamento de un empleado."""
 
+	mostrar_empleados(connection)
+	rut = leer_rut()
+	departamento_actual = connection.execute(
+		"SELECT id_departamento FROM empleados WHERE rut = ?", (rut,)
+	).fetchone()
+	if departamento_actual is None:
+		raise ValueError("El empleado indicado no existe.")
+	if cambiar and departamento_actual[0] is None:
+		raise ValueError("El empleado no tiene un departamento para cambiar.")
+	if not cambiar and departamento_actual[0] is not None:
+		raise ValueError("El empleado ya tiene un departamento asignado.")
 	mostrar_departamentos(connection)
-	empleado = Empleado(
-		input("RUT: "),
-		input("Nombre: "),
-		input("Apellido: "),
-		input("Correo: "),
-		input("Cargo: "),
-	)
-	id_departamento = leer_entero(
-		"ID del departamento (Enter para dejar sin asignar): ", True
-	)
-	guardar_empleado(connection, empleado, id_departamento)
-	print("Empleado creado correctamente.")
+	id_departamento = leer_entero("ID del departamento: ")
+	asignar_empleado_departamento_bd(connection, rut, id_departamento)
+	mensaje = "cambiado" if cambiar else "asignado"
+	print(f"Departamento {mensaje} correctamente.")
+
+
+def gestionar_departamento_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Muestra las opciones para asignar o cambiar departamentos."""
+
+	if usuario_actual.rol not in ROLES_GESTION:
+		raise PermissionError("Solo admin o rrhh pueden gestionar departamentos.")
+	while True:
+		print(
+			"\n=== GESTIONAR DEPARTAMENTO DE EMPLEADO ===\n"
+			"1. Asignar departamento\n"
+			"2. Cambiar departamento\n"
+			"0. Volver"
+		)
+		opcion = input("Seleccione una opcion: ").strip()
+		if opcion == "0":
+			return
+		if opcion == "1":
+			actualizar_departamento_empleado_menu(connection, cambiar=False)
+			return
+		if opcion == "2":
+			actualizar_departamento_empleado_menu(connection, cambiar=True)
+			return
+		print("Opcion no valida.")
+
+
+def gestionar_departamentos_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Muestra las opciones de creación y gestión de departamentos."""
+
+	if usuario_actual.rol not in ROLES_GESTION:
+		raise PermissionError("Solo admin o rrhh pueden gestionar departamentos.")
+	while True:
+		print(
+			"\n=== GESTIONAR DEPARTAMENTOS ===\n"
+			"1. Crear departamento\n"
+			"2. Asignar o cambiar departamento de empleado\n"
+			"0. Volver"
+		)
+		opcion = input("Seleccione una opcion: ").strip()
+		if opcion == "0":
+			return
+		if opcion == "1":
+			crear_departamento_menu(connection)
+			return
+		if opcion == "2":
+			gestionar_departamento_menu(connection, usuario_actual)
+			return
+		print("Opcion no valida.")
 
 
 def crear_proyecto_menu(connection: sqlite3.Connection) -> None:
@@ -376,10 +532,17 @@ def registrar_tiempo_menu(connection: sqlite3.Connection) -> None:
 	print("Registro de tiempo guardado correctamente.")
 
 
-def mostrar_reportes_menu(connection: sqlite3.Connection) -> None:
+def mostrar_reportes_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
 	"""Genera el reporte seleccionado con los registros de SQLite."""
 
-	filas = listar_registros_tiempo(connection)
+	rut_empleado = (
+		None
+		if usuario_actual.rol in ROLES_GESTION
+		else usuario_actual.empleado.rut if usuario_actual.empleado else ""
+	)
+	filas = listar_registros_tiempo(connection, rut_empleado)
 	if not filas:
 		print("No hay registros de tiempo para reportar.")
 		return
@@ -410,9 +573,9 @@ def crear_usuario_admin_menu(
 ) -> None:
 	"""Crea un usuario verificando los permisos administrativos."""
 
-	if usuario_actual.rol != "admin":
-		raise PermissionError("Solo un administrador puede crear usuarios desde el menu.")
-	crear_usuario_menu(connection)
+	if usuario_actual.rol not in ROLES_GESTION:
+		raise PermissionError("Solo admin o rrhh pueden crear usuarios desde el menu.")
+	registrar_usuario_menu(connection)
 
 
 def listar_usuarios_admin_menu(
@@ -420,9 +583,25 @@ def listar_usuarios_admin_menu(
 ) -> None:
 	"""Lista usuarios verificando los permisos administrativos."""
 
-	if usuario_actual.rol != "admin":
-		raise PermissionError("Solo un administrador puede listar usuarios.")
+	if usuario_actual.rol not in ROLES_GESTION:
+		raise PermissionError("Solo admin o rrhh pueden listar usuarios.")
 	mostrar_usuarios(connection)
+
+
+def eliminar_usuario_admin_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Permite al admin eliminar otro usuario, incluso si es admin."""
+
+	if usuario_actual.rol != "admin":
+		raise PermissionError("Solo un administrador puede eliminar usuarios.")
+	mostrar_usuarios(connection)
+	id_usuario = leer_entero("ID del usuario a eliminar: ")
+	if id_usuario == usuario_actual.id_usuario:
+		raise ValueError("No puede eliminar su propia cuenta.")
+	if not eliminar_usuario(connection, id_usuario):
+		raise ValueError("El usuario indicado no existe.")
+	print("Usuario eliminado correctamente.")
 
 
 def mostrar_registros_tiempo_menu(connection: sqlite3.Connection) -> None:
@@ -438,19 +617,19 @@ def ejecutar_opcion_menu(
 	"""Ejecuta una opcion del menu y devuelve si debe continuar."""
 
 	acciones = {
-		"1": lambda: crear_departamento_menu(connection),
+		"1": lambda: gestionar_departamentos_menu(connection, usuario_actual),
 		"2": lambda: mostrar_departamentos(connection),
-		"3": lambda: crear_empleado_menu(connection),
 		"4": lambda: mostrar_empleados(connection),
 		"5": lambda: crear_proyecto_menu(connection),
 		"6": lambda: mostrar_proyectos(connection),
 		"7": lambda: asignar_proyecto_menu(connection),
 		"8": lambda: registrar_tiempo_menu(connection),
 		"9": lambda: mostrar_registros_tiempo_menu(connection),
-		"10": lambda: mostrar_reportes_menu(connection),
+		"10": lambda: mostrar_reportes_menu(connection, usuario_actual),
 		"11": lambda: crear_usuario_admin_menu(connection, usuario_actual),
 		"12": lambda: listar_usuarios_admin_menu(connection, usuario_actual),
 		"13": lambda: cambiar_rol_menu(connection, usuario_actual),
+		"14": lambda: eliminar_usuario_admin_menu(connection, usuario_actual),
 	}
 	if opcion == "0":
 		print("Sesion finalizada.")
@@ -463,26 +642,42 @@ def ejecutar_opcion_menu(
 	return True
 
 
-def mostrar_opciones_menu() -> None:
-	"""Muestra las opciones disponibles del sistema."""
+def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
+	"""Muestra solo las opciones permitidas para el rol actual."""
 
-	print(
-		"\n=== ECOTECH SOLUTIONS ===\n"
-		"1. Crear departamento\n"
-		"2. Listar departamentos\n"
-		"3. Crear empleado\n"
-		"4. Listar empleados\n"
-		"5. Crear proyecto\n"
-		"6. Listar proyectos\n"
-		"7. Asignar empleado a proyecto\n"
-		"8. Registrar horas trabajadas\n"
-		"9. Ver registros de tiempo\n"
-		"10. Generar reporte\n"
-		"11. Crear usuario\n"
-		"12. Listar usuarios\n"
-		"13. Cambiar rol de usuario (solo admin)\n"
-		"0. Salir"
-	)
+	opciones = [
+		("2", "Listar departamentos"),
+		("4", "Listar empleados"),
+		("5", "Crear proyecto"),
+		("6", "Listar proyectos"),
+		("7", "Asignar empleado a proyecto"),
+		("8", "Registrar horas trabajadas"),
+		(
+			"9",
+			"Ver registros de tiempo"
+			if usuario_actual.rol in ROLES_GESTION
+			else "Ver mis horas registradas",
+		),
+		(
+			"10",
+			"Generar reporte"
+			if usuario_actual.rol in ROLES_GESTION
+			else "Generar mi reporte",
+		),
+	]
+	if usuario_actual.rol in ROLES_GESTION:
+		opciones.insert(0, ("1", "Gestionar departamentos"))
+		opciones.extend([
+			("11", "Crear usuario"),
+			("12", "Listar usuarios"),
+		])
+		if usuario_actual.rol == "admin":
+			opciones.append(("13", "Cambiar rol de usuario"))
+			opciones.append(("14", "Eliminar usuario"))
+	print("\n=== ECOTECH SOLUTIONS ===")
+	for numero, descripcion in opciones:
+		print(f"{numero}. {descripcion}")
+	print("0. Salir")
 
 
 def mostrar_menu() -> None:
@@ -505,7 +700,7 @@ def mostrar_menu() -> None:
 		)
 		print(f"Base de datos conectada: {DATABASE_PATH.name}")
 		while True:
-			mostrar_opciones_menu()
+			mostrar_opciones_menu(usuario_actual)
 			opcion = input("Seleccione una opcion: ").strip()
 			try:
 				if not ejecutar_opcion_menu(connection, usuario_actual, opcion):

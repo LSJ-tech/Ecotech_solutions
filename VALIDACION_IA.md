@@ -513,3 +513,101 @@ Se ampliaron ambos manejadores para capturar `sqlite3.Error`, la clase base de l
 - Se confirmó que `sqlite3.OperationalError` pertenece a `sqlite3.Error` y queda cubierto por los manejadores.
 - `main.py` compiló correctamente.
 - El editor no reportó errores en los archivos modificados.
+
+## Cambio 17 - Registro automático de empleado y usuario
+
+**Fecha:** 2026-09-15  
+**Archivos modificados:** `main.py`, `interfaz.py`  
+**Objetivo:** evitar que una persona deba registrarse dos veces cuando crea una cuenta de empleado.
+
+### Implementación
+
+Se agregó `guardar_usuario_con_empleado()`, que inserta el empleado y su usuario asociado en una sola transacción. Los roles `empleado` y `rrhh` solicitan RUT, nombre, apellidos, correo y cargo, y quedan vinculados mediante `rut_empleado`.
+
+### Validación
+
+- Se confirmó que ambos registros sobreviven al cierre y reapertura de SQLite.
+- Se confirmó que un error al crear el usuario revierte también el empleado.
+- Se verificó la compilación de `main.py` e `interfaz.py`.
+
+## Cambio 18 - Roles RRHH y permisos por rol
+
+**Fecha:** 2026-09-15  
+**Archivos modificados:** `main.py`, `interfaz.py`  
+**Objetivo:** incorporar el rol `rrhh` con permisos de gestión diferenciados.
+
+### Implementación
+
+Se agregó el rol `rrhh` a `ROLES_VALIDOS`. Su clave secreta es `12345` y su registro exige una ficha completa de empleado. `admin` conserva el código `1234`.
+
+RR.HH. puede gestionar departamentos, usuarios, proyectos, asignaciones, horas y reportes, pero no puede cambiar roles ni eliminar usuarios. El cambio de roles y la eliminación de cuentas quedan reservados a `admin`.
+
+### Validación
+
+- Se probó el guardado de una cuenta `rrhh` junto con su empleado.
+- Se verificaron los menús de `admin`, `rrhh` y `empleado`.
+- Se comprobó que RR.HH. no ve la opción de cambiar roles.
+- Se comprobó que las funciones administrativas rechazan roles no autorizados.
+
+## Cambio 19 - Gestión de departamentos
+
+**Fecha:** 2026-09-15  
+**Archivo modificado:** `interfaz.py`  
+**Objetivo:** centralizar la gestión de departamentos en una sola opción.
+
+### Implementación
+
+La opción `Gestionar departamentos` contiene un submenú para crear departamentos o asignar/cambiar el departamento de un empleado. La asignación inicial solo procede si el empleado no tiene departamento; el cambio requiere que ya tenga uno.
+
+### Validación
+
+- Se comprobó la asignación y posterior cambio de departamento en SQLite.
+- Se confirmó que la opción solo aparece para `admin` y `rrhh`.
+- Se eliminó de la base local el departamento `RR:HH`; el empleado asociado se conservó sin departamento.
+
+## Cambio 20 - Privacidad de horas y reportes
+
+**Fecha:** 2026-09-15  
+**Archivos modificados:** `main.py`, `interfaz.py`  
+**Objetivo:** impedir que los empleados consulten información de otros trabajadores.
+
+### Implementación
+
+`listar_registros_tiempo()` acepta opcionalmente un RUT para filtrar los resultados. Los empleados ven solo sus horas y su reporte; `admin` y `rrhh` pueden consultar la información general.
+
+### Validación
+
+- Con dos empleados y dos registros, la consulta general devolvió ambos registros.
+- La consulta filtrada devolvió únicamente el registro del empleado correspondiente.
+- Se comprobó el menú con los textos `Ver mis horas registradas` y `Generar mi reporte`.
+
+## Cambio 21 - Generación automática de usuarios
+
+**Fecha:** 2026-09-15  
+**Archivo modificado:** `interfaz.py`  
+**Objetivo:** evitar el ingreso manual del nombre de usuario.
+
+### Implementación
+
+El sistema genera el usuario con la inicial del nombre y el primer apellido, por ejemplo `nlatorre`. Si ya existe, utiliza la inicial y el segundo apellido, por ejemplo `ngonzalez`. Si ambas alternativas existen, informa el conflicto.
+
+### Validación
+
+- Se verificó la generación del primer usuario.
+- Se verificó la selección del segundo apellido ante una colisión.
+- Se verificó el mensaje cuando ambas alternativas están ocupadas.
+- El usuario generado se muestra al finalizar el registro.
+
+## Cambio 22 - Limpieza y revisión de SQLite
+
+**Fecha:** 2026-09-15  
+**Archivo modificado:** `ecotech_solutions.db`  
+**Objetivo:** comenzar las pruebas finales con una base limpia.
+
+### Implementación
+
+Se eliminaron los registros de departamentos, empleados, usuarios, proyectos, asignaciones y horas, conservando las tablas y el esquema SQLite.
+
+### Validación
+
+Todas las tablas quedaron con cero registros y la base pudo inicializarse nuevamente sin errores.

@@ -17,7 +17,8 @@ import sqlite3
 
 DATABASE_PATH = Path(__file__).with_name("ecotech_solutions.db")
 CODIGO_ADMIN = "1234"
-ROLES_VALIDOS = {"admin", "empleado"}
+CODIGO_RRHH = "12345"
+ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 
 SCHEMA_SQL = """
@@ -226,6 +227,28 @@ def guardar_empleado(
 	connection.commit()
 
 
+@revertir_si_falla
+def asignar_empleado_departamento_bd(
+	connection: sqlite3.Connection, rut: str, id_departamento: int
+) -> None:
+	"""Asigna un departamento existente a un empleado existente."""
+
+	rut = validar_rut(rut)
+	departamento = connection.execute(
+		"SELECT 1 FROM departamentos WHERE id_departamento = ?",
+		(id_departamento,),
+	).fetchone()
+	if departamento is None:
+		raise ValueError("El departamento indicado no existe.")
+	cursor = connection.execute(
+		"UPDATE empleados SET id_departamento = ? WHERE rut = ?",
+		(id_departamento, rut),
+	)
+	if cursor.rowcount != 1:
+		raise ValueError("El empleado indicado no existe.")
+	connection.commit()
+
+
 def listar_empleados(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	"""Devuelve los empleados almacenados junto con su departamento."""
 
@@ -430,6 +453,50 @@ def guardar_usuario(connection: sqlite3.Connection, usuario: Usuario) -> int:
 	return usuario.id_usuario
 
 
+@revertir_si_falla
+def guardar_usuario_con_empleado(
+	connection: sqlite3.Connection,
+	usuario: Usuario,
+	empleado: Empleado,
+	id_departamento: int | None = None,
+) -> int:
+	"""Inserta un empleado y su usuario asociado en una sola transacción."""
+
+	connection.execute(
+		"""
+		INSERT INTO empleados
+		(rut, nombre, apellido, correo, cargo, id_departamento)
+		VALUES (?, ?, ?, ?, ?, ?)
+		""",
+		(
+			empleado.rut,
+			empleado.nombre,
+			empleado.apellido,
+			empleado.correo,
+			empleado.cargo,
+			id_departamento,
+		),
+	)
+	usuario.empleado = empleado
+	cursor = connection.execute(
+		"""
+		INSERT INTO usuarios
+		(nombre_usuario, contrasena, activo, rut_empleado, rol)
+		VALUES (?, ?, ?, ?, ?)
+		""",
+		(
+			usuario.nombre_usuario,
+			generar_hash_contrasena(usuario.obtener_contrasena_interna()),
+			int(usuario.activo),
+			empleado.rut,
+			usuario.rol,
+		),
+	)
+	connection.commit()
+	usuario.id_usuario = int(cursor.lastrowid)
+	return usuario.id_usuario
+
+
 def listar_usuarios(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	"""Consulta los usuarios sin devolver su contraseña."""
 
@@ -529,21 +596,24 @@ def guardar_registro_tiempo(
 	return int(cursor.lastrowid)
 
 
-def listar_registros_tiempo(connection: sqlite3.Connection) -> list[sqlite3.Row]:
-	"""Consulta registros de tiempo con sus referencias principales."""
+def listar_registros_tiempo(
+	connection: sqlite3.Connection, rut_empleado: str | None = None
+) -> list[sqlite3.Row]:
+	"""Consulta registros de todos o de un empleado específico."""
 
-	return list(
-		connection.execute(
-			"""
-			SELECT r.id_registro, r.fecha, r.horas, r.rut_empleado,
-			       r.id_proyecto, e.nombre AS empleado, p.nombre AS proyecto
-			FROM registros_tiempo AS r
-			JOIN empleados AS e ON e.rut = r.rut_empleado
-			JOIN proyectos AS p ON p.id_proyecto = r.id_proyecto
-			ORDER BY r.fecha, r.id_registro
-			"""
-		)
-	)
+	consulta = """
+		SELECT r.id_registro, r.fecha, r.horas, r.rut_empleado,
+		       r.id_proyecto, e.nombre AS empleado, p.nombre AS proyecto
+		FROM registros_tiempo AS r
+		JOIN empleados AS e ON e.rut = r.rut_empleado
+		JOIN proyectos AS p ON p.id_proyecto = r.id_proyecto
+	"""
+	parametros: tuple[str, ...] = ()
+	if rut_empleado is not None:
+		consulta += " WHERE r.rut_empleado = ?"
+		parametros = (validar_rut(rut_empleado),)
+	consulta += " ORDER BY r.fecha, r.id_registro"
+	return list(connection.execute(consulta, parametros))
 
 
 @revertir_si_falla
@@ -665,7 +735,7 @@ class Usuario:
 		self.empleado = empleado
 		self.rol = validar_texto(rol, "El rol").lower()
 		if self.rol not in ROLES_VALIDOS:
-			raise ValueError("El rol debe ser admin o empleado.")
+			raise ValueError("El rol debe ser admin, empleado o rrhh.")
 
 	@property
 	def contrasena(self) -> str:
@@ -759,6 +829,7 @@ class ServicioReportes:
 
 __all__ = [
 	"CODIGO_ADMIN",
+	"CODIGO_RRHH",
 	"DATABASE_PATH",
 	"ROLES_VALIDOS",
 	"Departamento",
@@ -772,6 +843,7 @@ __all__ = [
 	"Usuario",
 	"asignar_empleado_a_departamento",
 	"asignar_empleado_a_proyecto",
+	"asignar_empleado_departamento_bd",
 	"asignar_empleado_proyecto_bd",
 	"conectar_bd",
 	"generar_hash_contrasena",
@@ -780,6 +852,7 @@ __all__ = [
 	"guardar_proyecto",
 	"guardar_registro_tiempo",
 	"guardar_usuario",
+	"guardar_usuario_con_empleado",
 	"inicializar_bd",
 	"listar_departamentos",
 	"listar_empleados",

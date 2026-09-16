@@ -20,7 +20,8 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 
 - Unidad 2: criterios 2.1.1 a 2.1.5 implementados y validados.
 - Arquitectura: núcleo de dominio y persistencia en `main.py`; interfaz de consola en `interfaz.py`.
-- Seguridad: PBKDF2 para contraseñas y `getpass` para entradas sensibles.
+- Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
+- Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos y complejidad cognitiva.
 - Unidad 3: pendiente de implementar el consumo seguro de una API externa, autenticación del servicio, validación de respuestas, manejo de errores HTTP y persistencia de datos externos.
 
@@ -148,19 +149,26 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Consultar registros de tiempo.
 - Crear y listar usuarios asociados a empleados.
 - Solicitar login antes de entrar al menú principal.
-- Registrar usuarios con rol `admin` o `empleado`.
-- Permitir que solo un administrador cambie el rol de otro usuario.
+- Registrar usuarios con rol `admin`, `rrhh` o `empleado`.
+- Generar automáticamente el nombre de usuario usando la inicial del nombre y el apellido.
+- Crear automáticamente la ficha del empleado para los roles `empleado` y `rrhh`.
+- Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
+- Permitir que solo un administrador cambie roles o elimine otras cuentas.
 - Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
 En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` se solicita el código temporal `1234`. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
 
-Las contraseñas y el código secreto se solicitan mediante `getpass`, por lo que no se muestran mientras se escriben en la consola.
+Las contraseñas y códigos secretos se muestran como asteriscos mientras se escriben. Las contraseñas se almacenan mediante PBKDF2 y no en texto plano.
 
 La interfaz centraliza mensajes y consultas reutilizadas, y separa el flujo de inicio de sesión en funciones auxiliares para mantener una complejidad cognitiva baja.
 
-Actualmente los roles disponibles son `admin` y `empleado`. La opción de cambiar roles es exclusiva del administrador y permite promover o quitar permisos administrativos a otro usuario.
+Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh` requiere la clave temporal `12345`, tiene permisos de gestión salvo cambiar roles y debe estar asociado a un empleado. El rol `admin` requiere el código `1234`; cambiar roles y eliminar usuarios son acciones exclusivas de `admin`.
+
+Los empleados solo pueden consultar sus propias horas registradas y generar su propio reporte. `admin` y `rrhh` pueden consultar los registros generales.
+
+La opción `Gestionar departamentos` permite crear departamentos y, mediante un submenú, asignar o cambiar el departamento de un empleado. Esta opción está disponible para `admin` y `rrhh`.
 
 La salida inicial esperada es:
 
@@ -185,6 +193,12 @@ Base de datos conectada: ecotech_solutions.db
 - Validación del RUT chileno con normalización, cálculo del dígito verificador y rechazo de formatos inválidos.
 - Cálculo del dígito verificador expresado con ramas `if/elif/else` para facilitar su revisión.
 - Mensaje de validación de departamentos centralizado en una constante para evitar literales duplicados.
+- Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
+- Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
+- Verificación de filtros de horas y reportes por empleado.
+- Verificación de menús diferenciados para `admin`, `rrhh` y `empleado`.
+- Verificación de generación automática de usuarios y uso del segundo apellido ante duplicidad.
+- Limpieza de `ecotech_solutions.db`, conservando el esquema y dejando sus tablas vacías.
 
 ## Registro de cambios y uso de IA
 
