@@ -611,3 +611,21 @@ Se eliminaron los registros de departamentos, empleados, usuarios, proyectos, as
 ### Validación
 
 Todas las tablas quedaron con cero registros y la base pudo inicializarse nuevamente sin errores.
+
+## Cambio 23 - Eliminación de usuario y conservación de proyectos
+
+**Fecha:** 2026-09-16  
+**Archivo modificado:** `main.py`  
+**Objetivo:** eliminar correctamente la información del empleado asociado sin perder los proyectos existentes.
+
+### Implementación
+
+`eliminar_usuario()` identifica el RUT del empleado asociado, elimina el usuario y elimina después al empleado dentro de la misma transacción. La clave foránea `empleado_proyecto` elimina únicamente la asignación del empleado; los proyectos permanecen almacenados para poder asignarlos a otra persona.
+
+### Validación
+
+- Se confirmó que el usuario eliminado ya no aparece en `usuarios`.
+- Se confirmó que el empleado asociado ya no aparece en `empleados`.
+- Se confirmó que la asignación correspondiente desaparece de `empleado_proyecto`.
+- Se confirmó que el proyecto permanece en `proyectos` y puede reutilizarse.
+- La prueba SQLite en memoria finalizó correctamente con el mensaje `OK: el proyecto permanece y se elimina solo la asignacion del empleado`.

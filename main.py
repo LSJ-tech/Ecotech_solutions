@@ -534,11 +534,18 @@ def actualizar_usuario(
 
 @revertir_si_falla
 def eliminar_usuario(connection: sqlite3.Connection, id_usuario: int) -> bool:
-	"""Elimina un usuario y devuelve si existía."""
+	"""Elimina un usuario y su empleado asociado, si existe."""
 
+	fila = connection.execute(
+		"SELECT rut_empleado FROM usuarios WHERE id_usuario = ?", (id_usuario,)
+	).fetchone()
+	if fila is None:
+		return False
 	cursor = connection.execute(
 		"DELETE FROM usuarios WHERE id_usuario = ?", (id_usuario,)
 	)
+	if fila["rut_empleado"]:
+		connection.execute("DELETE FROM empleados WHERE rut = ?", (fila["rut_empleado"],))
 	connection.commit()
 	return cursor.rowcount == 1
 

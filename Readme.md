@@ -103,6 +103,7 @@ La implementación incluye:
 - Tabla intermedia `empleado_proyecto` para la relación muchos a muchos.
 - Operaciones CRUD para departamentos, empleados, proyectos, usuarios y registros de tiempo.
 - Persistencia de proyectos, asignaciones y registros de horas.
+- Al eliminar un usuario asociado, también se elimina su empleado y su asignación, pero el proyecto se conserva para asignarlo a otra persona.
 - Validación de la asignación empleado-proyecto antes de guardar horas.
 - Consultas parametrizadas para separar los datos de las instrucciones SQL.
 
@@ -198,6 +199,7 @@ Base de datos conectada: ecotech_solutions.db
 - Verificación de filtros de horas y reportes por empleado.
 - Verificación de menús diferenciados para `admin`, `rrhh` y `empleado`.
 - Verificación de generación automática de usuarios y uso del segundo apellido ante duplicidad.
+- Verificación de que eliminar un usuario elimina su empleado y asignación asociada, sin eliminar el proyecto.
 - Limpieza de `ecotech_solutions.db`, conservando el esquema y dejando sus tablas vacías.
 
 ## Registro de cambios y uso de IA
