@@ -683,9 +683,11 @@ def actualizar_empleado(
 
 @revertir_si_falla
 def eliminar_empleado(connection: sqlite3.Connection, rut: str) -> bool:
-	"""Elimina un empleado y devuelve si existía."""
+	"""Elimina un empleado junto con su cuenta de acceso y devuelve si existía."""
 
 	rut = validar_rut(rut)
+	# Sin su ficha, la cuenta quedaría activa pero sin empleado: se elimina en la misma transacción.
+	connection.execute("DELETE FROM usuarios WHERE rut_empleado = ?", (rut,))
 	cursor = connection.execute("DELETE FROM empleados WHERE rut = ?", (rut,))
 	connection.commit()
 	return cursor.rowcount == 1
@@ -751,8 +753,16 @@ def actualizar_departamento(
 
 @revertir_si_falla
 def eliminar_departamento(connection: sqlite3.Connection, id_departamento: int) -> bool:
-	"""Elimina un departamento y devuelve si existía."""
+	"""Elimina un departamento sin empleados y devuelve si existía."""
 
+	asignados = connection.execute(
+		"SELECT COUNT(*) FROM empleados WHERE id_departamento = ?", (id_departamento,)
+	).fetchone()[0]
+	if asignados:
+		raise ValueError(
+			f"El departamento tiene {asignados} empleado(s) asignado(s); "
+			"reasígnelos antes de eliminarlo."
+		)
 	cursor = connection.execute(
 		"DELETE FROM departamentos WHERE id_departamento = ?", (id_departamento,)
 	)
@@ -970,6 +980,53 @@ def asignar_empleado_proyecto_bd(
 		(rut, id_proyecto),
 	)
 	connection.commit()
+
+
+@revertir_si_falla
+def desasignar_empleado_proyecto_bd(
+	connection: sqlite3.Connection, rut: str, id_proyecto: int
+) -> bool:
+	"""Quita la asignación de un empleado a un proyecto y devuelve si existía.
+
+	Las horas ya registradas se conservan: son trabajo realizado y se necesitan
+	para los informes y el cálculo de pagos; solo se impide registrar horas nuevas.
+	"""
+
+	rut = validar_rut(rut)
+	cursor = connection.execute(
+		"DELETE FROM empleado_proyecto WHERE rut_empleado = ? AND id_proyecto = ?",
+		(rut, id_proyecto),
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+def listar_empleados_proyecto(
+	connection: sqlite3.Connection, id_proyecto: int
+) -> list[sqlite3.Row]:
+	"""Consulta los empleados asignados a un proyecto."""
+
+	return list(
+		connection.execute(
+			"""
+			SELECT e.rut, e.nombre, e.apellido, e.cargo
+			FROM empleado_proyecto AS ep
+			JOIN empleados AS e ON e.rut = ep.rut_empleado
+			WHERE ep.id_proyecto = ?
+			ORDER BY e.apellido, e.nombre
+			""",
+			(id_proyecto,),
+		)
+	)
+
+
+def contar_registros_proyecto(connection: sqlite3.Connection, id_proyecto: int) -> int:
+	"""Devuelve cuántos registros de horas tiene un proyecto."""
+
+	fila = connection.execute(
+		"SELECT COUNT(*) FROM registros_tiempo WHERE id_proyecto = ?", (id_proyecto,)
+	).fetchone()
+	return int(fila[0])
 
 
 @revertir_si_falla
@@ -1386,6 +1443,15 @@ def asignar_empleado_a_proyecto(empleado: Empleado, proyecto: Proyecto) -> None:
 		proyecto.empleados.append(empleado)
 	if proyecto not in empleado.proyectos:
 		empleado.proyectos.append(proyecto)
+
+
+def desasignar_empleado_de_proyecto(empleado: Empleado, proyecto: Proyecto) -> None:
+	"""Deshace la asignación entre un empleado y un proyecto en ambos sentidos."""
+
+	if empleado in proyecto.empleados:
+		proyecto.empleados.remove(empleado)
+	if proyecto in empleado.proyectos:
+		empleado.proyectos.remove(proyecto)
 
 
 def registrar_tiempo(registro: RegistroTiempo) -> None:

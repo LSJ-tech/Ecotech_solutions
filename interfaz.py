@@ -2,7 +2,7 @@
 
 from datetime import date
 from getpass import getpass
-from typing import Callable
+from typing import Any, Callable
 import logging
 import sqlite3
 import sys
@@ -21,22 +21,33 @@ from main import (
 	RegistroTiempo,
 	ServicioReportes,
 	Usuario,
+	actualizar_departamento,
+	actualizar_empleado,
+	actualizar_proyecto,
+	actualizar_registro_tiempo,
 	asignar_empleado_proyecto_bd,
 	asignar_empleado_departamento_bd,
 	asignar_gerente_departamento,
 	calcular_pago,
 	calcular_tarifa_hora,
 	conectar_bd,
+	contar_registros_proyecto,
+	desasignar_empleado_proyecto_bd,
 	fila_a_empleado,
 	guardar_departamento,
 	guardar_proyecto,
 	guardar_registro_tiempo,
 	guardar_usuario,
 	guardar_usuario_con_empleado,
+	eliminar_departamento,
+	eliminar_empleado,
+	eliminar_proyecto,
+	eliminar_registro_tiempo,
 	eliminar_usuario,
 	inicializar_bd,
 	listar_departamentos,
 	listar_empleados,
+	listar_empleados_proyecto,
 	listar_proyectos,
 	listar_registros_tiempo,
 	listar_usuarios,
@@ -66,8 +77,18 @@ MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
 MENSAJE_OPCION_INVALIDA = "Opcion no valida."
 MENSAJE_SELECCION = "Seleccione una opcion: "
 MENSAJE_ID_PROYECTO = "ID del proyecto: "
+MENSAJE_ID_DEPARTAMENTO = "ID del departamento: "
+MENSAJE_PROYECTO_INEXISTENTE = "El proyecto indicado no existe."
+MENSAJE_DEPARTAMENTO_INEXISTENTE = "El departamento indicado no existe."
+MENSAJE_ENTER_CONSERVA = "Enter conserva el valor actual."
+MENSAJE_CANCELADO = "Operacion cancelada."
 ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = "SELECT * FROM empleados WHERE rut = ?"
+CONSULTA_PROYECTO = (
+	"SELECT id_proyecto, nombre, descripcion, fecha_inicio, fecha_fin, ciudad "
+	"FROM proyectos WHERE id_proyecto = ?"
+)
+OpcionMenu = tuple[str, str, Callable[[], None]]
 
 
 def leer_entero(mensaje: str, permitir_vacio: bool = False) -> int | None:
@@ -94,6 +115,77 @@ def leer_fecha(mensaje: str, permitir_vacio: bool = False) -> date | None:
 			return date.fromisoformat(valor)
 		except ValueError:
 			print("Ingrese una fecha valida con formato YYYY-MM-DD.")
+
+
+def a_fecha(valor: str) -> date:
+	"""Convierte texto YYYY-MM-DD en fecha con un mensaje de error legible."""
+
+	try:
+		return date.fromisoformat(valor.strip())
+	except ValueError:
+		raise ValueError("Ingrese una fecha valida con formato YYYY-MM-DD.") from None
+
+
+def a_monto(valor: str, campo: str) -> float:
+	"""Convierte texto en un monto positivo aceptando coma decimal."""
+
+	try:
+		return validar_monto(float(valor.strip().replace(",", ".")), campo)
+	except ValueError:
+		raise ValueError(f"{campo} debe ser un número mayor que 0.") from None
+
+
+def a_fecha_fin(valor: str, fecha_inicio: date) -> date:
+	"""Convierte la fecha de fin y comprueba que no preceda al inicio, para repetir solo ese campo."""
+
+	fecha_fin = a_fecha(valor)
+	if fecha_fin < fecha_inicio:
+		raise ValueError("La fecha de fin no puede ser anterior a la fecha de inicio.")
+	return fecha_fin
+
+
+def a_horas(valor: str) -> float:
+	"""Convierte texto en una cantidad de horas válida."""
+
+	try:
+		horas = float(valor.strip().replace(",", "."))
+	except ValueError:
+		raise ValueError("Las horas deben ser un número.") from None
+	return validar_horas(horas)
+
+
+def validar_correo(valor: str) -> str:
+	"""Valida un correo con un formato básico (texto no vacío con @)."""
+
+	correo = validar_texto(valor, "El correo")
+	if "@" not in correo:
+		raise ValueError("El correo debe tener un formato válido, por ejemplo nombre@dominio.cl.")
+	return correo
+
+
+def leer_o_conservar(mensaje: str, actual: Any, convertir: Callable[[str], Any]) -> Any:
+	"""Solicita un valor mostrando el actual; Enter lo conserva y un error repite solo ese campo."""
+
+	if actual in (None, ""):
+		mostrado = "sin registrar"
+	elif isinstance(actual, float):
+		mostrado = f"{actual:,.10g}"
+	else:
+		mostrado = str(actual)
+	while True:
+		valor = input(f"{mensaje} [{mostrado}]: ").strip()
+		if not valor:
+			return actual
+		try:
+			return convertir(valor)
+		except ValueError as error:
+			print(error)
+
+
+def confirmar(mensaje: str) -> bool:
+	"""Pide una confirmación explícita antes de una acción irreversible."""
+
+	return input(f"{mensaje} (s/n): ").strip().lower() == "s"
 
 
 def leer_texto(mensaje: str, campo: str) -> str:
@@ -205,10 +297,10 @@ def leer_correo() -> str:
 	"""Solicita un correo con un formato básico válido."""
 
 	while True:
-		correo = leer_texto("Correo: ", "El correo")
-		if "@" in correo:
-			return correo
-		print("El correo debe tener un formato válido, por ejemplo nombre@dominio.cl.")
+		try:
+			return validar_correo(input("Correo: "))
+		except ValueError as error:
+			print(error)
 
 
 def generar_nombre_usuario(
@@ -273,7 +365,7 @@ def leer_horas() -> float:
 
 	while True:
 		try:
-			return validar_horas(float(input("Horas trabajadas: ").strip()))
+			return a_horas(input("Horas trabajadas: "))
 		except ValueError as error:
 			print(error)
 
@@ -303,16 +395,56 @@ def avisar_respaldo(resultado: ResultadoConsulta) -> None:
 		)
 
 
+def obtener_fila_empleado(connection: sqlite3.Connection, rut: str) -> sqlite3.Row:
+	"""Devuelve la fila del empleado o falla si no existe."""
+
+	fila = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()
+	if fila is None:
+		raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
+	return fila
+
+
+def obtener_proyecto(connection: sqlite3.Connection, id_proyecto: int) -> sqlite3.Row:
+	"""Devuelve la fila del proyecto o falla si no existe."""
+
+	fila = connection.execute(CONSULTA_PROYECTO, (id_proyecto,)).fetchone()
+	if fila is None:
+		raise ValueError(MENSAJE_PROYECTO_INEXISTENTE)
+	return fila
+
+
+def obtener_departamento(connection: sqlite3.Connection, id_departamento: int) -> sqlite3.Row:
+	"""Devuelve la fila del departamento (con su gerente) o falla si no existe."""
+
+	for fila in listar_departamentos(connection):
+		if fila["id_departamento"] == id_departamento:
+			return fila
+	raise ValueError(MENSAJE_DEPARTAMENTO_INEXISTENTE)
+
+
+def ejecutar_submenu(titulo: str, opciones: list[OpcionMenu]) -> None:
+	"""Muestra un submenú, ejecuta la opción elegida y vuelve; 0 vuelve sin hacer nada."""
+
+	acciones = {numero: accion for numero, _texto, accion in opciones}
+	while True:
+		print(f"\n=== {titulo} ===")
+		for numero, descripcion, _accion in opciones:
+			print(f"{numero}. {descripcion}")
+		print("0. Volver")
+		opcion = input(MENSAJE_SELECCION).strip()
+		if opcion == "0":
+			return
+		if opcion in acciones:
+			acciones[opcion]()
+			return
+		print(MENSAJE_OPCION_INVALIDA)
+
+
 def consultar_clima_menu(connection: sqlite3.Connection) -> None:
 	"""Consulta el clima actual de la ciudad de un proyecto."""
 
 	mostrar_proyectos(connection)
-	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
-	fila = connection.execute(
-		"SELECT nombre, ciudad FROM proyectos WHERE id_proyecto = ?", (id_proyecto,)
-	).fetchone()
-	if fila is None:
-		raise ValueError("El proyecto indicado no existe.")
+	fila = obtener_proyecto(connection, leer_entero(MENSAJE_ID_PROYECTO))
 	if not fila["ciudad"]:
 		raise ValueError("El proyecto no tiene una ciudad asignada.")
 	resultado = consultar_con_respaldo(connection, ServicioClima(), fila["ciudad"])
@@ -342,11 +474,10 @@ def leer_monto(mensaje: str, campo: str) -> float:
 	"""Solicita un monto positivo y repite solo ese campo ante un valor inválido."""
 
 	while True:
-		valor = input(mensaje).strip().replace(",", ".")
 		try:
-			return validar_monto(float(valor), campo)
-		except ValueError:
-			print(f"{campo} debe ser un número mayor que 0.")
+			return a_monto(input(mensaje), campo)
+		except ValueError as error:
+			print(error)
 
 
 def obtener_indicador(connection: sqlite3.Connection) -> ResultadoConsulta:
@@ -374,10 +505,7 @@ def calcular_pago_menu(connection: sqlite3.Connection, usuario_actual: Usuario) 
 	verificar_gestion(usuario_actual, "calcular pagos")
 	mostrar_empleados(connection, detallado=True)
 	rut = leer_rut()
-	fila = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()
-	if fila is None:
-		raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
-	empleado = fila_a_empleado(fila)
+	empleado = fila_a_empleado(obtener_fila_empleado(connection, rut))
 	if empleado.salario is None:
 		raise ValueError("El empleado no tiene salario registrado para calcular un pago.")
 	horas = sumar_horas_empleado(connection, rut)
@@ -649,7 +777,7 @@ def asignar_gerente_menu(connection: sqlite3.Connection) -> None:
 	"""Asigna o cambia el gerente de un departamento."""
 
 	mostrar_departamentos(connection)
-	id_departamento = leer_entero("ID del departamento: ")
+	id_departamento = leer_entero(MENSAJE_ID_DEPARTAMENTO)
 	mostrar_empleados(connection)
 	rut_gerente = leer_rut_opcional("RUT del gerente (Enter para quitar el gerente): ")
 	asignar_gerente_departamento(connection, id_departamento, rut_gerente)
@@ -673,66 +801,142 @@ def actualizar_departamento_empleado_menu(
 	if not cambiar and departamento_actual[0] is not None:
 		raise ValueError("El empleado ya tiene un departamento asignado.")
 	mostrar_departamentos(connection)
-	id_departamento = leer_entero("ID del departamento: ")
+	id_departamento = leer_entero(MENSAJE_ID_DEPARTAMENTO)
 	asignar_empleado_departamento_bd(connection, rut, id_departamento)
 	mensaje = "cambiado" if cambiar else "asignado"
 	print(f"Departamento {mensaje} correctamente.")
 
 
+def editar_departamento_menu(connection: sqlite3.Connection) -> None:
+	"""Cambia el nombre de un departamento conservando su gerente."""
+
+	mostrar_departamentos(connection)
+	fila = obtener_departamento(connection, leer_entero(MENSAJE_ID_DEPARTAMENTO))
+	print(MENSAJE_ENTER_CONSERVA)
+	nombre = leer_o_conservar(
+		"Nombre", fila["nombre"], lambda valor: validar_texto(valor, CAMPO_NOMBRE_DEPARTAMENTO)
+	)
+	actualizar_departamento(connection, fila["id_departamento"], nombre, fila["rut_gerente"])
+	print("Departamento actualizado correctamente.")
+
+
+def eliminar_departamento_menu(connection: sqlite3.Connection) -> None:
+	"""Elimina un departamento sin empleados, previa confirmación."""
+
+	mostrar_departamentos(connection)
+	fila = obtener_departamento(connection, leer_entero(MENSAJE_ID_DEPARTAMENTO))
+	if not confirmar(f"Se eliminará el departamento {fila['nombre']}. ¿Confirma?"):
+		print(MENSAJE_CANCELADO)
+		return
+	eliminar_departamento(connection, fila["id_departamento"])
+	print("Departamento eliminado correctamente.")
+
+
 def gestionar_departamento_menu(
 	connection: sqlite3.Connection, usuario_actual: Usuario
 ) -> None:
-	"""Muestra las opciones para asignar o cambiar departamentos."""
+	"""Muestra las opciones para asignar o cambiar el departamento de un empleado."""
 
-	if usuario_actual.rol not in ROLES_GESTION:
-		raise PermissionError("Solo admin o rrhh pueden gestionar departamentos.")
-	while True:
-		print(
-			"\n=== GESTIONAR DEPARTAMENTO DE EMPLEADO ===\n"
-			"1. Asignar departamento\n"
-			"2. Cambiar departamento\n"
-			"0. Volver"
-		)
-		opcion = input(MENSAJE_SELECCION).strip()
-		if opcion == "0":
-			return
-		if opcion == "1":
-			actualizar_departamento_empleado_menu(connection, cambiar=False)
-			return
-		if opcion == "2":
-			actualizar_departamento_empleado_menu(connection, cambiar=True)
-			return
-		print(MENSAJE_OPCION_INVALIDA)
+	verificar_gestion(usuario_actual, "gestionar departamentos")
+	ejecutar_submenu(
+		"GESTIONAR DEPARTAMENTO DE EMPLEADO",
+		[
+			("1", "Asignar departamento",
+				lambda: actualizar_departamento_empleado_menu(connection, cambiar=False)),
+			("2", "Cambiar departamento",
+				lambda: actualizar_departamento_empleado_menu(connection, cambiar=True)),
+		],
+	)
 
 
 def gestionar_departamentos_menu(
 	connection: sqlite3.Connection, usuario_actual: Usuario
 ) -> None:
-	"""Muestra las opciones de creación y gestión de departamentos."""
+	"""Muestra las opciones de creación, edición, eliminación y gestión de departamentos."""
 
-	if usuario_actual.rol not in ROLES_GESTION:
-		raise PermissionError("Solo admin o rrhh pueden gestionar departamentos.")
-	while True:
-		print(
-			"\n=== GESTIONAR DEPARTAMENTOS ===\n"
-			"1. Crear departamento\n"
-			"2. Asignar o cambiar departamento de empleado\n"
-			"3. Asignar o cambiar gerente\n"
-			"0. Volver"
-		)
-		opcion = input(MENSAJE_SELECCION).strip()
-		if opcion == "0":
-			return
-		if opcion == "1":
-			crear_departamento_menu(connection)
-			return
-		if opcion == "2":
-			gestionar_departamento_menu(connection, usuario_actual)
-			return
-		if opcion == "3":
-			asignar_gerente_menu(connection)
-			return
-		print(MENSAJE_OPCION_INVALIDA)
+	verificar_gestion(usuario_actual, "gestionar departamentos")
+	ejecutar_submenu(
+		"GESTIONAR DEPARTAMENTOS",
+		[
+			("1", "Crear departamento", lambda: crear_departamento_menu(connection)),
+			("2", "Editar nombre de departamento", lambda: editar_departamento_menu(connection)),
+			("3", "Eliminar departamento", lambda: eliminar_departamento_menu(connection)),
+			("4", "Asignar o cambiar gerente", lambda: asignar_gerente_menu(connection)),
+			("5", "Asignar o cambiar departamento de empleado",
+				lambda: gestionar_departamento_menu(connection, usuario_actual)),
+		],
+	)
+
+
+def editar_empleado_menu(connection: sqlite3.Connection) -> None:
+	"""Edita la ficha de un empleado campo por campo; Enter conserva cada valor."""
+
+	mostrar_empleados(connection, detallado=True)
+	fila = obtener_fila_empleado(connection, leer_rut())
+	actual = fila_a_empleado(fila)
+	print(MENSAJE_ENTER_CONSERVA)
+	nombre = leer_o_conservar("Nombre", actual.nombre, lambda v: validar_texto(v, "El nombre"))
+	apellido = leer_o_conservar(
+		"Apellido", actual.apellido, lambda v: validar_texto(v, "El apellido")
+	)
+	correo = leer_o_conservar("Correo", actual.correo, validar_correo)
+	cargo = leer_o_conservar("Cargo", actual.cargo, lambda v: validar_texto(v, "El cargo"))
+	direccion = leer_o_conservar(
+		"Direccion", actual.direccion, lambda v: validar_texto(v, "La dirección")
+	)
+	telefono = leer_o_conservar("Telefono", actual.telefono, validar_telefono)
+	fecha_inicio_contrato = leer_o_conservar(
+		"Fecha de inicio de contrato (YYYY-MM-DD)", actual.fecha_inicio_contrato, a_fecha
+	)
+	salario = leer_o_conservar(
+		"Salario mensual en CLP", actual.salario, lambda v: a_monto(v, "El salario")
+	)
+	actualizar_empleado(
+		connection,
+		actual.rut,
+		nombre=nombre,
+		apellido=apellido,
+		correo=correo,
+		cargo=cargo,
+		direccion=direccion,
+		telefono=telefono,
+		fecha_inicio_contrato=fecha_inicio_contrato,
+		salario=salario,
+		id_departamento=fila["id_departamento"],
+	)
+	print("Ficha actualizada correctamente.")
+
+
+def eliminar_empleado_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Elimina un empleado, su cuenta y sus horas, previa confirmación."""
+
+	mostrar_empleados(connection)
+	rut = leer_rut()
+	if usuario_actual.empleado is not None and usuario_actual.empleado.rut == rut:
+		raise ValueError("No puede eliminar su propia ficha.")
+	obtener_fila_empleado(connection, rut)
+	horas = sumar_horas_empleado(connection, rut)
+	if not confirmar(
+		f"Se eliminará la ficha, su cuenta de acceso y {horas:g} horas registradas. ¿Confirma?"
+	):
+		print(MENSAJE_CANCELADO)
+		return
+	eliminar_empleado(connection, rut)
+	print("Empleado eliminado correctamente.")
+
+
+def gestionar_empleados_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Muestra las opciones de edición y eliminación de empleados."""
+
+	verificar_gestion(usuario_actual, "gestionar empleados")
+	ejecutar_submenu(
+		"GESTIONAR EMPLEADOS",
+		[
+			("1", "Editar ficha de empleado", lambda: editar_empleado_menu(connection)),
+			("2", "Eliminar empleado",
+				lambda: eliminar_empleado_menu(connection, usuario_actual)),
+		],
+	)
 
 
 def crear_proyecto_menu(
@@ -766,6 +970,96 @@ def asignar_proyecto_menu(
 	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
 	asignar_empleado_proyecto_bd(connection, rut, id_proyecto)
 	print("Empleado asignado al proyecto.")
+
+
+def editar_proyecto_menu(connection: sqlite3.Connection) -> None:
+	"""Edita un proyecto campo por campo; Enter conserva cada valor."""
+
+	mostrar_proyectos(connection)
+	fila = obtener_proyecto(connection, leer_entero(MENSAJE_ID_PROYECTO))
+	print(MENSAJE_ENTER_CONSERVA)
+	nombre = leer_o_conservar(
+		"Nombre", fila["nombre"], lambda v: validar_texto(v, "El nombre del proyecto")
+	)
+	descripcion = leer_o_conservar(
+		"Descripcion", fila["descripcion"], lambda v: validar_texto(v, "La descripción")
+	)
+	fecha_inicio = leer_o_conservar(
+		"Fecha de inicio (YYYY-MM-DD)", date.fromisoformat(fila["fecha_inicio"]), a_fecha
+	)
+	fecha_fin = leer_o_conservar(
+		"Fecha de fin (YYYY-MM-DD)",
+		date.fromisoformat(fila["fecha_fin"]) if fila["fecha_fin"] else None,
+		lambda v: a_fecha_fin(v, fecha_inicio),
+	)
+	ciudad = leer_o_conservar("Ciudad", fila["ciudad"], validar_ciudad)
+	actualizar_proyecto(
+		connection,
+		fila["id_proyecto"],
+		nombre=nombre,
+		descripcion=descripcion,
+		fecha_inicio=fecha_inicio,
+		fecha_fin=fecha_fin,
+		ciudad=ciudad,
+	)
+	print("Proyecto actualizado correctamente.")
+
+
+def eliminar_proyecto_menu(connection: sqlite3.Connection) -> None:
+	"""Elimina un proyecto con sus asignaciones y horas, previa confirmación."""
+
+	mostrar_proyectos(connection)
+	fila = obtener_proyecto(connection, leer_entero(MENSAJE_ID_PROYECTO))
+	registros = contar_registros_proyecto(connection, fila["id_proyecto"])
+	if not confirmar(
+		f"Se eliminará el proyecto {fila['nombre']}, sus asignaciones y "
+		f"{registros} registro(s) de horas. ¿Confirma?"
+	):
+		print(MENSAJE_CANCELADO)
+		return
+	eliminar_proyecto(connection, fila["id_proyecto"])
+	print("Proyecto eliminado correctamente.")
+
+
+def mostrar_empleados_proyecto(connection: sqlite3.Connection, id_proyecto: int) -> None:
+	"""Muestra los empleados asignados a un proyecto."""
+
+	asignados = listar_empleados_proyecto(connection, id_proyecto)
+	if not asignados:
+		print("El proyecto no tiene empleados asignados.")
+		return
+	for empleado in asignados:
+		print(f"{empleado['rut']}: {empleado['nombre']} {empleado['apellido']} | {empleado['cargo']}")
+
+
+def desasignar_proyecto_menu(connection: sqlite3.Connection) -> None:
+	"""Quita a un empleado de un proyecto; sus horas registradas se conservan."""
+
+	mostrar_proyectos(connection)
+	fila = obtener_proyecto(connection, leer_entero(MENSAJE_ID_PROYECTO))
+	mostrar_empleados_proyecto(connection, fila["id_proyecto"])
+	rut = leer_rut("RUT del empleado: ")
+	if not desasignar_empleado_proyecto_bd(connection, rut, fila["id_proyecto"]):
+		raise ValueError("El empleado no está asignado a ese proyecto.")
+	print("Empleado desasignado del proyecto; sus horas registradas se conservan.")
+
+
+def gestionar_proyectos_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Muestra las opciones de creación, edición, eliminación y asignación de proyectos."""
+
+	verificar_gestion(usuario_actual, "gestionar proyectos")
+	ejecutar_submenu(
+		"GESTIONAR PROYECTOS",
+		[
+			("1", "Crear proyecto", lambda: crear_proyecto_menu(connection, usuario_actual)),
+			("2", "Editar proyecto", lambda: editar_proyecto_menu(connection)),
+			("3", "Eliminar proyecto", lambda: eliminar_proyecto_menu(connection)),
+			("4", "Asignar empleado a proyecto",
+				lambda: asignar_proyecto_menu(connection, usuario_actual)),
+			("5", "Desasignar empleado de proyecto",
+				lambda: desasignar_proyecto_menu(connection)),
+		],
+	)
 
 
 def registrar_tiempo_menu(
@@ -875,15 +1169,9 @@ def eliminar_usuario_admin_menu(
 	print("Usuario eliminado correctamente.")
 
 
-def mostrar_registros_tiempo_menu(
-	connection: sqlite3.Connection, usuario_actual: Usuario
-) -> None:
-	"""Muestra los registros de tiempo permitidos para el rol actual."""
+def mostrar_registros(registros: list[sqlite3.Row]) -> None:
+	"""Imprime registros de tiempo, una línea por registro."""
 
-	registros = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
-	if not registros:
-		print("No hay registros de tiempo.")
-		return
 	for registro in registros:
 		print(
 			f"{registro['id_registro']}: {registro['fecha']} | "
@@ -893,7 +1181,81 @@ def mostrar_registros_tiempo_menu(
 		)
 
 
-OpcionMenu = tuple[str, str, Callable[[], None]]
+def mostrar_registros_tiempo_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Muestra los registros de tiempo permitidos para el rol actual."""
+
+	registros = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
+	if not registros:
+		print("No hay registros de tiempo.")
+		return
+	mostrar_registros(registros)
+
+
+def obtener_registro_visible(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> sqlite3.Row:
+	"""Lista los registros que el rol puede tocar y devuelve el elegido por ID.
+
+	Un empleado solo ve (y por lo tanto solo puede elegir) sus propios registros.
+	"""
+
+	registros = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
+	if not registros:
+		raise ValueError("No hay registros de tiempo para editar o eliminar.")
+	mostrar_registros(registros)
+	id_registro = leer_entero("ID del registro: ")
+	for fila in registros:
+		if fila["id_registro"] == id_registro:
+			return fila
+	raise ValueError("El registro indicado no existe o no le pertenece.")
+
+
+def editar_registro_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Edita fecha, horas y descripción de un registro; Enter conserva cada valor."""
+
+	fila = obtener_registro_visible(connection, usuario_actual)
+	print(MENSAJE_ENTER_CONSERVA)
+	fecha = leer_o_conservar("Fecha (YYYY-MM-DD)", date.fromisoformat(fila["fecha"]), a_fecha)
+	horas = leer_o_conservar("Horas trabajadas", float(fila["horas"]), a_horas)
+	descripcion_tarea = leer_o_conservar(
+		"Descripcion breve de las tareas", fila["descripcion_tarea"], validar_descripcion_tarea
+	)
+	actualizar_registro_tiempo(
+		connection,
+		fila["id_registro"],
+		fecha=fecha,
+		horas=horas,
+		descripcion_tarea=descripcion_tarea,
+	)
+	print("Registro actualizado correctamente.")
+
+
+def eliminar_registro_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Elimina un registro de tiempo previa confirmación."""
+
+	fila = obtener_registro_visible(connection, usuario_actual)
+	if not confirmar(
+		f"Se eliminará el registro {fila['id_registro']} "
+		f"({fila['fecha']}, {fila['horas']:g} horas). ¿Confirma?"
+	):
+		print(MENSAJE_CANCELADO)
+		return
+	eliminar_registro_tiempo(connection, fila["id_registro"])
+	print("Registro eliminado correctamente.")
+
+
+def gestionar_registros_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Muestra las opciones de edición y eliminación de registros de tiempo."""
+
+	ejecutar_submenu(
+		"EDITAR O ELIMINAR REGISTROS DE TIEMPO",
+		[
+			("1", "Editar registro", lambda: editar_registro_menu(connection, usuario_actual)),
+			("2", "Eliminar registro", lambda: eliminar_registro_menu(connection, usuario_actual)),
+		],
+	)
 
 
 def construir_opciones_menu(
@@ -912,27 +1274,30 @@ def construir_opciones_menu(
 		("1", "Gestionar departamentos", gestion,
 			lambda: gestionar_departamentos_menu(connection, usuario_actual)),
 		("2", "Listar departamentos", True, lambda: mostrar_departamentos(connection)),
-		("3", "Listar empleados", True, lambda: mostrar_empleados(connection, detallado=gestion)),
-		("4", "Crear proyecto", gestion, lambda: crear_proyecto_menu(connection, usuario_actual)),
-		("5", "Listar proyectos", True, lambda: mostrar_proyectos(connection)),
-		("6", "Asignar empleado a proyecto", gestion,
-			lambda: asignar_proyecto_menu(connection, usuario_actual)),
+		("3", "Gestionar empleados", gestion,
+			lambda: gestionar_empleados_menu(connection, usuario_actual)),
+		("4", "Listar empleados", True, lambda: mostrar_empleados(connection, detallado=gestion)),
+		("5", "Gestionar proyectos", gestion,
+			lambda: gestionar_proyectos_menu(connection, usuario_actual)),
+		("6", "Listar proyectos", True, lambda: mostrar_proyectos(connection)),
 		("7", etiqueta("Registrar horas trabajadas", "Registrar mis horas trabajadas"), True,
 			lambda: registrar_tiempo_menu(connection, usuario_actual)),
 		("8", etiqueta("Ver registros de tiempo", "Ver mis horas registradas"), True,
 			lambda: mostrar_registros_tiempo_menu(connection, usuario_actual)),
-		("9", etiqueta("Generar reporte", "Generar mi reporte"), True,
+		("9", etiqueta("Editar o eliminar registros de tiempo", "Editar o eliminar mis registros"),
+			True, lambda: gestionar_registros_menu(connection, usuario_actual)),
+		("10", etiqueta("Generar reporte", "Generar mi reporte"), True,
 			lambda: mostrar_reportes_menu(connection, usuario_actual)),
-		("10", "Consultar clima de un proyecto", True, lambda: consultar_clima_menu(connection)),
-		("11", "Consultar indicador economico", True,
+		("11", "Consultar clima de un proyecto", True, lambda: consultar_clima_menu(connection)),
+		("12", "Consultar indicador economico", True,
 			lambda: consultar_indicador_menu(connection)),
-		("12", "Calcular pago en moneda extranjera", gestion,
+		("13", "Calcular pago en moneda extranjera", gestion,
 			lambda: calcular_pago_menu(connection, usuario_actual)),
-		("13", "Crear usuario", gestion, lambda: crear_usuario_admin_menu(connection, usuario_actual)),
-		("14", "Listar usuarios", gestion,
+		("14", "Crear usuario", gestion, lambda: crear_usuario_admin_menu(connection, usuario_actual)),
+		("15", "Listar usuarios", gestion,
 			lambda: listar_usuarios_admin_menu(connection, usuario_actual)),
-		("15", "Cambiar rol de usuario", admin, lambda: cambiar_rol_menu(connection, usuario_actual)),
-		("16", "Eliminar usuario", admin,
+		("16", "Cambiar rol de usuario", admin, lambda: cambiar_rol_menu(connection, usuario_actual)),
+		("17", "Eliminar usuario", admin,
 			lambda: eliminar_usuario_admin_menu(connection, usuario_actual)),
 	]
 	return [(numero, texto, accion) for numero, texto, permitido, accion in opciones if permitido]

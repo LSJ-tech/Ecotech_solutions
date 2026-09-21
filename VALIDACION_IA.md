@@ -27,6 +27,7 @@
 23. Cambio 37 (alineación con la Unidad 1, paso 2): cifrado en reposo de los datos personales del empleado.
 24. Cambio 38 (alineación con la Unidad 1, paso 3): registro de cuentas restringido a RR.HH. y validación del login.
 25. Cambio 39 (alineación con la Unidad 1, paso 4): gerente de departamento y descripción de tareas en el registro de tiempo.
+26. Cambio 40 (alineación con la Unidad 1, paso 5): CRUD completo desde el menú y desasignación de proyectos.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1107,3 +1108,29 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile main.py interfaz.py test_nucleo.py` y `ruff check --select F` sin nombres indefinidos.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 60 pruebas en verde. Las ocho nuevas verifican la migración de ambas columnas sobre una base antigua (registro previo con descripción vacía); crear departamento con gerente, quitarlo, rechazar un RUT inexistente y un departamento inexistente; que eliminar al gerente deja el departamento sin gerente sin borrarlo; que el modelo rechaza un gerente que no es `Empleado`; que la descripción se normaliza, se persiste, se actualiza y rechaza más de 200 caracteres; que ambos exportadores la incluyen (CSV con escapado de comillas); y los flujos de menú de registro de horas (repite la descripción vacía) y de creación y asignación de gerente.
 - Migración sobre una copia de `ecotech_solutions.db` real: columnas agregadas y `foreign_key_check` vacío.
+
+## Cambio 40 - Alineación con la Unidad 1, paso 5: CRUD completo desde el menú
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `test_nucleo.py`, `.gitignore` (base de datos retirada del repositorio)
+**Objetivo:** cumplir los requisitos de la guía de la Unidad 1 "gestionar departamentos (crear, modificar y eliminar)", "gestionar proyectos (crear, actualizar y eliminar)" y "asignar y desasignar empleados de proyectos", y cerrar el indicador 2.1.3.G.5 (operaciones CRUD accesibles desde la aplicación). Las funciones `actualizar_*` y `eliminar_*` existían en `main.py` desde la Unidad 2, pero el menú solo ofrecía crear y listar.
+
+### Implementación
+
+- `main.py`: `desasignar_empleado_proyecto_bd()` elimina la fila de `empleado_proyecto` y devuelve si existía; `listar_empleados_proyecto()` y `contar_registros_proyecto()` apoyan los flujos del menú; `desasignar_empleado_de_proyecto()` es la operación de dominio simétrica a `asignar_empleado_a_proyecto()` prevista en `uml.mmd`. `eliminar_departamento()` rechaza con mensaje claro un departamento con empleados (antes fallaba con un error de clave foránea de SQLite). `eliminar_empleado()` elimina también la cuenta de acceso vinculada en la misma transacción.
+- `interfaz.py`: submenús `Gestionar departamentos` (crear, editar nombre, eliminar, gerente, departamento de empleado), `Gestionar empleados` (editar ficha, eliminar) y `Gestionar proyectos` (crear, editar, eliminar, asignar, desasignar), y la opción `Editar o eliminar registros de tiempo` para todos los roles. `ejecutar_submenu()` reemplaza los bucles repetidos de cada submenú. `leer_o_conservar()` implementa la edición campo por campo (Enter conserva el valor actual; un error repite solo ese campo) reutilizando los conversores `a_fecha()`, `a_fecha_fin()`, `a_monto()`, `a_horas()` y `validar_correo()`, que ahora también usan los formularios de alta. `confirmar()` exige `s` antes de eliminar. `obtener_fila_empleado()`, `obtener_proyecto()` y `obtener_departamento()` centralizan las búsquedas por identificador. El menú principal pasa de 16 a 17 opciones, con cada entidad en el par `Gestionar … / Listar …`.
+- Reglas de negocio aplicadas en el menú: no se puede eliminar la propia ficha; al editar un empleado se conserva su departamento; al editar un departamento se conserva su gerente; eliminar un proyecto informa cuántos registros de horas se perderán; desasignar conserva las horas.
+
+### Revisión técnica
+
+- Desasignar y horas registradas: la IA propuso borrar los registros del empleado en ese proyecto al desasignarlo, para mantener la coherencia con la regla "debe estar asignado para registrar horas". Se descartó: las horas son trabajo realizado, se necesitan para el informe y el cálculo de pago, y la regla solo debe impedir registros nuevos. El menú lo informa expresamente.
+- Eliminar empleado y cuenta: la IA sugirió dejar la cuenta y confiar en `ON DELETE SET NULL`. Se descartó porque la cuenta seguiría activa sin ficha y con permisos de empleado; se elimina en la misma transacción, igual que ya hacía `eliminar_usuario()` en sentido inverso.
+- Edición: la primera versión pedía todos los campos de nuevo. Se reemplazó por `leer_o_conservar()` para que el usuario solo escriba lo que cambia; la validación de la fecha de fin respecto del inicio se movió al lector (`a_fecha_fin()`) porque, validada solo en `actualizar_proyecto()`, un error hacía perder el formulario completo (detectado por una prueba).
+- Eliminar departamento con empleados: se prefirió rechazar la operación con un mensaje a reasignar automáticamente o dejar a los empleados sin departamento, porque esa decisión corresponde a RR.HH.
+- Se retiró `ecotech_solutions.db` del control de versiones (ya figuraba en `.gitignore`): contiene datos cifrados con la clave de cada equipo y se regenera vacía al primer inicio.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py test_nucleo.py` y `ruff check --select F` sin nombres indefinidos.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 71 pruebas en verde. Las once nuevas verifican: desasignar conserva las horas, impide registros nuevos y es idempotente (base y dominio); eliminar un departamento con empleados se rechaza y sin empleados funciona; eliminar un empleado borra su cuenta y sus horas; editar la ficha con Enter conserva los valores, repite solo el teléfono y el salario inválidos y mantiene la dirección cifrada; eliminar empleado exige confirmación y rechaza la propia ficha; editar y eliminar departamento conservan el gerente e informan un ID inexistente; editar proyecto repite solo la fecha de fin anterior al inicio, desasignar informa al empleado y falla si no estaba asignado, y eliminar borra asignaciones y registros; un empleado no puede editar registros ajenos y sí los propios (horas con coma decimal); el submenú vuelve con `0` y rechaza opciones inválidas; el menú principal agrupa el CRUD por entidad y el rol `empleado` ve las opciones 2, 4, 6, 7, 8, 9, 10, 11 y 12.
+- Ejecución manual sobre una base nueva: registro del administrador inicial, creación de departamento, proyecto y empleado, edición con Enter, desasignación y eliminaciones con confirmación.

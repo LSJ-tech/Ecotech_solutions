@@ -453,5 +453,179 @@ class PruebasGerenteYDescripcionTarea(unittest.TestCase):
 		self.assertIn("Gerente: Ana Perez", listado)
 
 
+class PruebasCrudCompleto(unittest.TestCase):
+	"""Edición, eliminación y desasignación desde el núcleo y desde el menú."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		self.empleado = empleado_completo()
+		main.guardar_empleado(self.connection, self.empleado)
+		self.proyecto = main.Proyecto(0, "Proy", "Desc", date(2026, 1, 1))
+		main.guardar_proyecto(self.connection, self.proyecto)
+		main.asignar_empleado_proyecto_bd(self.connection, RUT, self.proyecto.id_proyecto)
+		main.guardar_registro_tiempo(
+			self.connection,
+			main.RegistroTiempo(0, date(2026, 1, 2), 8, self.empleado, self.proyecto, "Cableado"),
+		)
+		self.admin = main.Usuario(1, "admin", "x", rol="admin")
+		self.cuenta_empleado = main.Usuario(2, "aperez", "x", empleado=self.empleado, rol="empleado")
+
+	def tearDown(self):
+		self.connection.close()
+
+	def _contar(self, tabla):
+		return self.connection.execute(f"SELECT COUNT(*) FROM {tabla}").fetchone()[0]
+
+	def test_desasignar_conserva_horas_e_impide_registrar_nuevas(self):
+		self.assertTrue(main.desasignar_empleado_proyecto_bd(self.connection, RUT, self.proyecto.id_proyecto))
+		self.assertFalse(main.desasignar_empleado_proyecto_bd(self.connection, RUT, self.proyecto.id_proyecto))
+		self.assertEqual(self._contar("registros_tiempo"), 1)
+		self.assertEqual(main.listar_empleados_proyecto(self.connection, self.proyecto.id_proyecto), [])
+		with self.assertRaises(ValueError):
+			main.guardar_registro_tiempo(
+				self.connection,
+				main.RegistroTiempo(0, date(2026, 1, 3), 2, self.empleado, self.proyecto, "Nada"),
+			)
+
+	def test_desasignar_en_el_dominio_es_simetrico(self):
+		main.asignar_empleado_a_proyecto(self.empleado, self.proyecto)
+		main.desasignar_empleado_de_proyecto(self.empleado, self.proyecto)
+		self.assertEqual((self.empleado.proyectos, self.proyecto.empleados), ([], []))
+		main.desasignar_empleado_de_proyecto(self.empleado, self.proyecto)  # idempotente
+
+	def test_eliminar_departamento_con_empleados_se_rechaza(self):
+		id_departamento = main.guardar_departamento(self.connection, "Ventas")
+		main.asignar_empleado_departamento_bd(self.connection, RUT, id_departamento)
+		with self.assertRaisesRegex(ValueError, "1 empleado"):
+			main.eliminar_departamento(self.connection, id_departamento)
+		self.assertEqual(self._contar("departamentos"), 1)
+		main.eliminar_empleado(self.connection, RUT)
+		self.assertTrue(main.eliminar_departamento(self.connection, id_departamento))
+
+	def test_eliminar_empleado_borra_su_cuenta_y_sus_horas(self):
+		main.guardar_usuario(self.connection, self.cuenta_empleado)
+		self.assertEqual(self._contar("usuarios"), 1)
+		self.assertTrue(main.eliminar_empleado(self.connection, RUT))
+		self.assertEqual((self._contar("usuarios"), self._contar("registros_tiempo")), (0, 0))
+		self.assertFalse(main.eliminar_empleado(self.connection, RUT))
+
+	def test_menu_edita_ficha_conservando_valores_con_enter(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.editar_empleado_menu(self.connection),
+			[RUT, "", "", "", "Lider", "", "abc", "+56 9 8888 7777", "", "-5", "1500000"],
+		)
+		self.assertIn("Ficha actualizada", salida)
+		self.assertIn("solo puede contener", salida)  # el teléfono inválido repitió solo ese campo
+		ficha = main.listar_empleados(self.connection)[0]
+		self.assertEqual((ficha["nombre"], ficha["cargo"], ficha["telefono"]), ("Ana", "Lider", "+56 9 8888 7777"))
+		self.assertEqual(ficha["salario"], 1_500_000.0)
+		self.assertEqual(ficha["direccion"], "Av. Siempre Viva 123")
+
+	def test_menu_elimina_empleado_solo_con_confirmacion(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.eliminar_empleado_menu(self.connection, self.admin), [RUT, "n"]
+		)
+		self.assertIn("cancelada", salida)
+		self.assertEqual(self._contar("empleados"), 1)
+		with self.assertRaisesRegex(ValueError, "propia ficha"):
+			ejecutar_con_entradas(
+				lambda: ui.eliminar_empleado_menu(self.connection, self.cuenta_empleado), [RUT]
+			)
+		salida = ejecutar_con_entradas(
+			lambda: ui.eliminar_empleado_menu(self.connection, self.admin), [RUT, "s"]
+		)
+		self.assertIn("eliminado correctamente", salida)
+		self.assertEqual(self._contar("empleados"), 0)
+
+	def test_menu_edita_y_elimina_departamento(self):
+		id_departamento = main.guardar_departamento(self.connection, "Ventas", RUT)
+		salida = ejecutar_con_entradas(
+			lambda: ui.editar_departamento_menu(self.connection), [str(id_departamento), "Comercial"]
+		)
+		self.assertIn("actualizado", salida)
+		fila = main.listar_departamentos(self.connection)[0]
+		self.assertEqual((fila["nombre"], fila["gerente"]), ("Comercial", "Ana Perez"))
+		salida = ejecutar_con_entradas(
+			lambda: ui.eliminar_departamento_menu(self.connection), [str(id_departamento), "s"]
+		)
+		self.assertIn("eliminado", salida)
+		self.assertEqual(self._contar("departamentos"), 0)
+		with self.assertRaisesRegex(ValueError, "no existe"):
+			ejecutar_con_entradas(lambda: ui.editar_departamento_menu(self.connection), ["99"])
+
+	def test_menu_edita_elimina_y_desasigna_proyecto(self):
+		id_proyecto = str(self.proyecto.id_proyecto)
+		salida = ejecutar_con_entradas(
+			lambda: ui.editar_proyecto_menu(self.connection),
+			[id_proyecto, "", "", "", "2025-12-31", "2026-06-30", "Temuco"],
+		)
+		self.assertIn("anterior a la fecha de inicio", salida)
+		fila = main.listar_proyectos(self.connection)[0]
+		self.assertEqual((fila["nombre"], fila["fecha_fin"], fila["ciudad"]), ("Proy", "2026-06-30", "Temuco"))
+		salida = ejecutar_con_entradas(
+			lambda: ui.desasignar_proyecto_menu(self.connection), [id_proyecto, RUT]
+		)
+		self.assertIn("Ana Perez", salida)
+		self.assertIn("se conservan", salida)
+		with self.assertRaisesRegex(ValueError, "no está asignado"):
+			ejecutar_con_entradas(lambda: ui.desasignar_proyecto_menu(self.connection), [id_proyecto, RUT])
+		salida = ejecutar_con_entradas(
+			lambda: ui.eliminar_proyecto_menu(self.connection), [id_proyecto, "s"]
+		)
+		self.assertIn("eliminado correctamente", salida)
+		self.assertEqual((self._contar("proyectos"), self._contar("registros_tiempo")), (0, 0))
+
+	def test_menu_registro_empleado_solo_toca_los_propios(self):
+		otro = empleado_completo("22222222-2", "otro@x.cl")
+		main.guardar_empleado(self.connection, otro)
+		main.asignar_empleado_proyecto_bd(self.connection, otro.rut, self.proyecto.id_proyecto)
+		id_ajeno = main.guardar_registro_tiempo(
+			self.connection, main.RegistroTiempo(0, date(2026, 1, 5), 3, otro, self.proyecto, "Ajeno")
+		)
+		with self.assertRaisesRegex(ValueError, "no le pertenece"):
+			ejecutar_con_entradas(
+				lambda: ui.editar_registro_menu(self.connection, self.cuenta_empleado), [str(id_ajeno)]
+			)
+		salida = ejecutar_con_entradas(
+			lambda: ui.editar_registro_menu(self.connection, self.cuenta_empleado),
+			["1", "", "x", "6,5", ""],
+		)
+		self.assertIn("deben ser un número", salida)
+		self.assertIn("actualizado", salida)
+		fila = main.listar_registros_tiempo(self.connection, RUT)[0]
+		self.assertEqual((fila["horas"], fila["descripcion_tarea"]), (6.5, "Cableado"))
+		salida = ejecutar_con_entradas(
+			lambda: ui.eliminar_registro_menu(self.connection, self.admin), [str(id_ajeno), "s"]
+		)
+		self.assertIn("eliminado", salida)
+		self.assertEqual(self._contar("registros_tiempo"), 1)
+
+	def test_submenu_vuelve_con_cero_y_rechaza_opciones_invalidas(self):
+		llamadas = []
+		salida = ejecutar_con_entradas(
+			lambda: ui.ejecutar_submenu("PRUEBA", [("1", "Accion", lambda: llamadas.append(1))]),
+			["9", "1"],
+		)
+		self.assertIn("Opcion no valida", salida)
+		self.assertEqual(llamadas, [1])
+		ejecutar_con_entradas(
+			lambda: ui.ejecutar_submenu("PRUEBA", [("1", "Accion", lambda: llamadas.append(2))]),
+			["0"],
+		)
+		self.assertEqual(llamadas, [1])
+
+	def test_menu_principal_agrupa_crud_por_entidad(self):
+		gestion = [texto for _n, texto, _a in ui.construir_opciones_menu(self.connection, self.admin)]
+		self.assertEqual(gestion[:6], [
+			"Gestionar departamentos", "Listar departamentos", "Gestionar empleados",
+			"Listar empleados", "Gestionar proyectos", "Listar proyectos",
+		])
+		empleado = ui.construir_opciones_menu(self.connection, self.cuenta_empleado)
+		numeros = [numero for numero, _t, _a in empleado]
+		self.assertEqual(numeros, ["2", "4", "6", "7", "8", "9", "10", "11", "12"])
+		self.assertIn(("9", "Editar o eliminar mis registros"), [(n, t) for n, t, _a in empleado])
+
+
 if __name__ == "__main__":
 	unittest.main()

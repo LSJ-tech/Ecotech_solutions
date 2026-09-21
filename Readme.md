@@ -65,7 +65,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 
 El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
 
-Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: sin `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`, y sin edición ni eliminación de departamentos, proyectos y registros desde el menú. La ficha completa de `Empleado`, `CifradorDatos`, el registro de cuentas restringido a RR.HH., `Departamento.gerente` y `RegistroTiempo.descripcion_tarea` ya están implementados.
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: sin `Informe` ni `ServicioReportes.guardar()` (informes a archivo). La ficha completa de `Empleado`, `CifradorDatos`, el registro de cuentas restringido a RR.HH., `Departamento.gerente`, `RegistroTiempo.descripcion_tarea`, `desasignar_empleado_de_proyecto()` y el CRUD completo desde el menú ya están implementados.
 
 ## Estado de los criterios
 
@@ -112,9 +112,9 @@ La implementación incluye:
 - Creación de tablas para departamentos, empleados, proyectos, usuarios y registros de tiempo.
 - Claves foráneas para mantener las relaciones del UML.
 - Tabla intermedia `empleado_proyecto` para la relación muchos a muchos.
-- Operaciones CRUD para departamentos, empleados, proyectos, usuarios y registros de tiempo.
+- Operaciones CRUD para departamentos, empleados, proyectos, usuarios y registros de tiempo, todas accesibles desde el menú (crear, listar, editar y eliminar), además de asignar y desasignar empleados de proyectos.
 - Persistencia de proyectos, asignaciones y registros de horas.
-- Al eliminar un usuario asociado, también se elimina su empleado y su asignación, pero el proyecto se conserva para asignarlo a otra persona.
+- Al eliminar un usuario asociado, también se elimina su empleado y su asignación, pero el proyecto se conserva para asignarlo a otra persona; al eliminar un empleado se elimina su cuenta de acceso en la misma transacción. Un departamento con empleados no se puede eliminar hasta reasignarlos; al eliminar un proyecto se eliminan sus asignaciones y registros de horas (previa confirmación). Desasignar a un empleado de un proyecto conserva sus horas registradas.
 - Validación de la asignación empleado-proyecto antes de guardar horas.
 - Consultas parametrizadas para separar los datos de las instrucciones SQL.
 
@@ -147,7 +147,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 
 | Criterio | Evidencia |
 |---|---|
-| 3.1.1 Consumo de servicios externos con librerías oficiales | `ServicioClima` (OpenWeatherMap) y `ServicioIndicadores` (mindicador.cl) sobre `requests.Session`; respuestas JSON procesadas y validadas; datos usados en el menú (opciones 10, 11 y 12). |
+| 3.1.1 Consumo de servicios externos con librerías oficiales | `ServicioClima` (OpenWeatherMap) y `ServicioIndicadores` (mindicador.cl) sobre `requests.Session`; respuestas JSON procesadas y validadas; datos usados en el menú (opciones 11, 12 y 13). |
 | 3.1.2 Autenticación y validación de entradas | Login con PBKDF2 y roles; códigos de rol y llave de API en `.env`; `validar_ciudad()`, lista blanca de indicadores, `validar_monto()`; opciones filtradas por rol y verificadas al ejecutar. |
 | 3.1.3 Manejo de errores en servicios externos | `ClienteHTTP` traduce 401/403, 404, 429, 5xx, timeout, sin conexión, cuerpo no JSON y respuestas de más de 1 MB a `ErrorServicioExterno` con mensajes sin URL ni llave; reintento ante 5xx/timeout; respaldo local con aviso; el menú nunca se interrumpe. |
 | 3.1.4 Ajuste de seguridad con apoyo de IA | Cambios 27 a 32 de `VALIDACION_IA.md`: propuestas de IA evaluadas, modificadas o descartadas con justificación (exposición de la llave en mensajes, falta de timeout, uso sin validar de la respuesta, orden de la serie, caché con expiración, tamaño de respuesta). |
@@ -158,7 +158,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-`test_nucleo.py` (32 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento y la descripción de tareas: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+`test_nucleo.py` (43 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento, la descripción de tareas y el CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios): migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
 
 `test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
@@ -187,13 +187,13 @@ La interfaz de consola se encuentra separada exclusivamente en `interfaz.py`. El
 
 Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tablas y muestra un menú para:
 
-- Crear y listar departamentos, empleados y proyectos.
-- Asignar empleados a proyectos (solo `admin` y `rrhh`).
+- Crear, listar, editar y eliminar departamentos, empleados y proyectos (los submenús `Gestionar …` son exclusivos de `admin` y `rrhh`).
+- Asignar y desasignar empleados de proyectos (solo `admin` y `rrhh`).
 - Registrar horas trabajadas (los empleados solo las propias).
-- Consultar registros de tiempo.
+- Consultar, editar y eliminar registros de tiempo (los empleados solo los propios).
 - Crear y listar usuarios asociados a empleados.
 - Solicitar login antes de entrar al menú principal; usuario y contraseña vacíos se rechazan antes de consultar la base.
-- Registrar el administrador inicial desde la pantalla de acceso solo cuando la base no tiene cuentas; después, las cuentas `admin`, `rrhh` o `empleado` se crean únicamente desde el sistema por `admin` o `rrhh` (opción 13).
+- Registrar el administrador inicial desde la pantalla de acceso solo cuando la base no tiene cuentas; después, las cuentas `admin`, `rrhh` o `empleado` se crean únicamente desde el sistema por `admin` o `rrhh` (opción 14).
 - Generar automáticamente el nombre de usuario usando la inicial del nombre y el apellido.
 - Crear automáticamente la ficha del empleado para los roles `empleado` y `rrhh`, con dirección, teléfono, fecha de inicio de contrato y salario mensual; el sistema asigna un ID único automático.
 - Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
@@ -215,29 +215,30 @@ Menú completo (los roles ven solo lo permitido):
 
 | N.º | Opción | Roles |
 |---|---|---|
-| 1 | Gestionar departamentos | admin, rrhh |
+| 1 | Gestionar departamentos: crear, editar nombre, eliminar, asignar o cambiar gerente, asignar o cambiar departamento de un empleado | admin, rrhh |
 | 2 | Listar departamentos | todos |
-| 3 | Listar empleados (admin y rrhh ven además la ficha personal) | todos |
-| 4 | Crear proyecto | admin, rrhh |
-| 5 | Listar proyectos | todos |
-| 6 | Asignar empleado a proyecto | admin, rrhh |
+| 3 | Gestionar empleados: editar ficha (Enter conserva cada valor), eliminar | admin, rrhh |
+| 4 | Listar empleados (admin y rrhh ven además la ficha personal) | todos |
+| 5 | Gestionar proyectos: crear, editar, eliminar, asignar y desasignar empleados | admin, rrhh |
+| 6 | Listar proyectos | todos |
 | 7 | Registrar horas trabajadas (los empleados, solo las propias) | todos |
 | 8 | Ver registros de tiempo (los empleados, solo los propios) | todos |
-| 9 | Generar reporte (los empleados, solo el propio) | todos |
-| 10 | Consultar clima de un proyecto | todos |
-| 11 | Consultar indicador económico | todos |
-| 12 | Calcular pago en moneda extranjera | admin, rrhh |
-| 13 | Crear usuario | admin, rrhh |
-| 14 | Listar usuarios | admin, rrhh |
-| 15 | Cambiar rol de usuario | admin |
-| 16 | Eliminar usuario | admin |
+| 9 | Editar o eliminar registros de tiempo (los empleados, solo los propios) | todos |
+| 10 | Generar reporte (los empleados, solo el propio) | todos |
+| 11 | Consultar clima de un proyecto | todos |
+| 12 | Consultar indicador económico | todos |
+| 13 | Calcular pago en moneda extranjera | admin, rrhh |
+| 14 | Crear usuario | admin, rrhh |
+| 15 | Listar usuarios | admin, rrhh |
+| 16 | Cambiar rol de usuario | admin |
+| 17 | Eliminar usuario | admin |
 | 0 | Salir | todos |
 
 Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh` requiere el código `ECOTECH_CODIGO_RRHH`, tiene permisos de gestión salvo cambiar roles y debe estar asociado a un empleado. El rol `admin` requiere el código `ECOTECH_CODIGO_ADMIN`; cambiar roles y eliminar usuarios son acciones exclusivas de `admin`.
 
 Los empleados solo pueden consultar sus propias horas registradas, registrar horas a su propio nombre y generar su propio reporte. `admin` y `rrhh` pueden crear proyectos, asignar empleados a proyectos, registrar horas de cualquier empleado y consultar los registros generales. Las verificaciones de permiso se aplican tanto al mostrar el menú como al ejecutar la opción, por lo que escribir un número oculto no permite saltarse la restricción.
 
-La opción `Gestionar departamentos` permite crear departamentos (con gerente opcional), asignar o cambiar el departamento de un empleado y asignar, cambiar o quitar el gerente. El gerente debe ser un empleado registrado; si ese empleado se elimina, el departamento queda sin gerente (`ON DELETE SET NULL`). Esta opción está disponible para `admin` y `rrhh`.
+Los submenús `Gestionar departamentos`, `Gestionar empleados` y `Gestionar proyectos` (solo `admin` y `rrhh`) agrupan el CRUD de cada entidad. Al editar, cada campo muestra su valor actual entre corchetes y Enter lo conserva; un valor inválido repite solo ese campo. Toda eliminación pide confirmación (`s/n`) e informa qué se pierde (horas registradas, cuenta de acceso, asignaciones). El gerente debe ser un empleado registrado; si ese empleado se elimina, el departamento queda sin gerente (`ON DELETE SET NULL`). `Editar o eliminar registros de tiempo` está disponible para todos los roles, pero un empleado solo ve y puede elegir sus propios registros.
 
 Al registrar horas se solicita una breve descripción de las tareas realizadas (hasta 200 caracteres), que se muestra en el listado y se incluye en los informes de texto y CSV.
 
@@ -314,7 +315,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suites `test_nucleo.py` (32) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (43) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
@@ -324,6 +325,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Verificación de que eliminar un usuario elimina su empleado y asignación asociada, sin eliminar el proyecto.
 - Verificación de que un empleado solo ve sus propios registros en `Ver mis horas registradas` y no puede crear proyectos, asignar personas ni registrar horas a nombre de otro RUT.
 - Limpieza de `ecotech_solutions.db`, conservando el esquema y dejando sus tablas vacías.
+- La base de datos ya no se versiona (`.gitignore`): cada integrante la genera al primer inicio registrando el administrador inicial.
 
 ## Registro de cambios y uso de IA
 
