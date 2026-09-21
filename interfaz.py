@@ -9,8 +9,6 @@ if sys.platform == "win32":
 	import msvcrt
 
 from main import (
-	CODIGO_ADMIN,
-	CODIGO_RRHH,
 	DATABASE_PATH,
 	ROLES_VALIDOS,
 	Empleado,
@@ -38,6 +36,7 @@ from main import (
 	validar_horas,
 	validar_rut,
 	validar_texto,
+	verificar_codigo_rol,
 	verificar_contrasena,
 )
 
@@ -245,11 +244,10 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 
 	contrasena = leer_contrasena_validada()
 	rol = leer_rol()
-	if rol in {"admin", "rrhh"}:
-		codigo_esperado = CODIGO_ADMIN if rol == "admin" else CODIGO_RRHH
+	if rol in ROLES_GESTION:
 		while True:
 			codigo = leer_contrasena_validada("Codigo secreto: ")
-			if codigo == codigo_esperado:
+			if verificar_codigo_rol(rol, codigo):
 				break
 			print("Codigo secreto incorrecto. Intente nuevamente.")
 

@@ -23,12 +23,12 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
-- Unidad 3: pendiente de implementar el consumo seguro de una API externa, autenticación del servicio, validación de respuestas, manejo de errores HTTP y persistencia de datos externos.
+- Unidad 3: en desarrollo. Paso 1 completado: configuración segura mediante variables de entorno (`.env`) y dependencias declaradas en `requirements.txt`. Pendiente: consumo de APIs de clima e indicadores económicos, manejo de errores HTTP y persistencia de datos externos.
 
 ## Requisitos
 
 - Python 3.10 o superior.
-- No se requieren dependencias externas para la etapa actual.
+- Dependencias declaradas en `requirements.txt`: `requests` (consumo de APIs) y `python-dotenv` (carga de `.env`).
 - SQLite se utiliza mediante la librería estándar `sqlite3`.
 
 ## Estructura del proyecto
@@ -37,6 +37,8 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 Ecotech_solutions/
 ├── main.py
 ├── interfaz.py
+├── requirements.txt
+├── .env.example
 ├── Readme.md
 ├── VALIDACION_IA.md
 ├── Rubrica.pdf
@@ -134,7 +136,14 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 
 ## Ejecución
 
-Desde la carpeta del proyecto:
+Desde la carpeta del proyecto, la primera vez:
+
+```powershell
+py -3 -m pip install -r requirements.txt
+copy .env.example .env
+```
+
+Luego editar `.env` y definir `ECOTECH_CODIGO_ADMIN` y `ECOTECH_CODIGO_RRHH` (códigos exigidos para registrar cuentas `admin` y `rrhh`). Para ejecutar:
 
 ```powershell
 py -3 interfaz.py
@@ -159,13 +168,13 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
-En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` se solicita el código temporal `1234`. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
+En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` o `rrhh` se solicita el código secreto definido en `.env`; si la variable no está configurada, el sistema lo informa sin revelar ningún valor. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
 
 Las contraseñas y códigos secretos se muestran como asteriscos mientras se escriben. Las contraseñas se almacenan mediante PBKDF2 y no en texto plano.
 
 La interfaz centraliza mensajes y consultas reutilizadas, y separa el flujo de inicio de sesión en funciones auxiliares para mantener una complejidad cognitiva baja.
 
-Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh` requiere la clave temporal `12345`, tiene permisos de gestión salvo cambiar roles y debe estar asociado a un empleado. El rol `admin` requiere el código `1234`; cambiar roles y eliminar usuarios son acciones exclusivas de `admin`.
+Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh` requiere el código `ECOTECH_CODIGO_RRHH`, tiene permisos de gestión salvo cambiar roles y debe estar asociado a un empleado. El rol `admin` requiere el código `ECOTECH_CODIGO_ADMIN`; cambiar roles y eliminar usuarios son acciones exclusivas de `admin`.
 
 Los empleados solo pueden consultar sus propias horas registradas, registrar horas a su propio nombre y generar su propio reporte. `admin` y `rrhh` pueden crear proyectos, asignar empleados a proyectos, registrar horas de cualquier empleado y consultar los registros generales. Las verificaciones de permiso se aplican tanto al mostrar el menú como al ejecutar la opción, por lo que escribir un número oculto no permite saltarse la restricción.
 
@@ -177,6 +186,19 @@ La salida inicial esperada es:
 Base de datos conectada: ecotech_solutions.db
 === ECOTECH SOLUTIONS ===
 ```
+
+## Configuración segura (Unidad 3)
+
+Los datos sensibles no se escriben en el código fuente. `main.py` carga el archivo `.env` con `python-dotenv` sin sobrescribir variables ya definidas en el sistema, y expone `obtener_codigo_rol()` y `verificar_codigo_rol()`; esta última compara con `hmac.compare_digest` para evitar fugas por tiempo de respuesta.
+
+| Variable | Uso |
+|---|---|
+| `ECOTECH_CODIGO_ADMIN` | Código exigido para registrar una cuenta `admin`. |
+| `ECOTECH_CODIGO_RRHH` | Código exigido para registrar una cuenta `rrhh`. |
+| `ECOTECH_DB_PATH` | Ruta opcional de la base SQLite. |
+| `OPENWEATHER_API_KEY` | Llave del servicio de clima (se utilizará en los siguientes pasos). |
+
+`.env` está en `.gitignore`; `.env.example` documenta las variables sin valores. Para la entrega comprimida se debe incluir un `.env` con los códigos acordados por el equipo.
 
 ## Validaciones realizadas
 
@@ -198,6 +220,7 @@ Base de datos conectada: ecotech_solutions.db
 - Cálculo del dígito verificador expresado con ramas `if/elif/else` para facilitar su revisión.
 - Mensaje de validación de departamentos centralizado en una constante para evitar literales duplicados.
 - Mensajes de menú y consulta de empleado centralizados en constantes de `interfaz.py`; eliminados el import y la función sin uso.
+- Verificación de que los códigos de rol se leen desde `.env`, que un código faltante produce un mensaje claro sin exponer valores y que ningún secreto queda escrito en el código fuente.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.

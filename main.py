@@ -10,14 +10,24 @@ from pathlib import Path
 from typing import Any, Callable
 import hashlib
 import hmac
+import os
 import re
 import secrets
 import sqlite3
 
+from dotenv import load_dotenv
 
-DATABASE_PATH = Path(__file__).with_name("ecotech_solutions.db")
-CODIGO_ADMIN = "1234"
-CODIGO_RRHH = "12345"
+
+# Carga las variables de .env sin sobrescribir las ya definidas en el sistema.
+load_dotenv(Path(__file__).with_name(".env"), override=False)
+
+DATABASE_PATH = Path(
+	os.environ.get("ECOTECH_DB_PATH") or Path(__file__).with_name("ecotech_solutions.db")
+)
+VARIABLES_CODIGO_ROL = {
+	"admin": "ECOTECH_CODIGO_ADMIN",
+	"rrhh": "ECOTECH_CODIGO_RRHH",
+}
 ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 
@@ -109,6 +119,27 @@ def validar_rut(valor: str) -> str:
 	if digito != digito_esperado:
 		raise ValueError("El dígito verificador del RUT no es válido.")
 	return f"{int(cuerpo)}-{digito_esperado}"
+
+
+def obtener_codigo_rol(rol: str) -> str:
+	"""Lee desde el entorno el código secreto exigido para registrar un rol."""
+
+	variable = VARIABLES_CODIGO_ROL.get(rol)
+	if variable is None:
+		raise ValueError(f"El rol {rol} no requiere código secreto.")
+	codigo = os.environ.get(variable, "").strip()
+	if not codigo:
+		raise ValueError(
+			f"No está configurado el código para el rol {rol}. "
+			f"Defina {variable} en el archivo .env."
+		)
+	return codigo
+
+
+def verificar_codigo_rol(rol: str, codigo: str) -> bool:
+	"""Compara el código ingresado en tiempo constante para evitar fugas por tiempo."""
+
+	return hmac.compare_digest(codigo.encode("utf-8"), obtener_codigo_rol(rol).encode("utf-8"))
 
 
 def validar_horas(horas: float) -> float:
@@ -835,10 +866,9 @@ class ServicioReportes:
 
 
 __all__ = [
-	"CODIGO_ADMIN",
-	"CODIGO_RRHH",
 	"DATABASE_PATH",
 	"ROLES_VALIDOS",
+	"VARIABLES_CODIGO_ROL",
 	"Departamento",
 	"Empleado",
 	"ExportadorExcel",
@@ -866,9 +896,11 @@ __all__ = [
 	"listar_proyectos",
 	"listar_registros_tiempo",
 	"listar_usuarios",
+	"obtener_codigo_rol",
 	"validar_horas",
 	"validar_rut",
 	"validar_texto",
+	"verificar_codigo_rol",
 	"verificar_contrasena",
 ]
 

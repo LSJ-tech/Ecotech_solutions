@@ -14,6 +14,7 @@
 10. Cambios 17 a 24: rol RR.HH., gestión de departamentos, privacidad de horas, usuarios automáticos, limpieza SQLite, eliminación de usuarios y validación interactiva.
 11. Cambio 25: corrección de permisos por rol en proyectos y registros de tiempo.
 12. Cambio 26: corrección de avisos de mantenibilidad SonarQube en la interfaz.
+13. Cambio 27 (Unidad 3, paso 1): configuración segura con variables de entorno y dependencias.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -715,3 +716,34 @@ Se comprobó con un recorrido del AST que no quedan literales de mensaje repetid
 
 - `py -3 -m py_compile interfaz.py` finalizó correctamente.
 - Prueba en SQLite en memoria: el mensaje de empleado inexistente coincide con la constante, el registro de horas del empleado sigue funcionando, las opciones inválidas muestran `Opcion no valida.` y el prompt `Seleccione una opcion: ` se sigue mostrando en los menús.
+
+## Cambio 27 - Unidad 3, paso 1: configuración segura con variables de entorno
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`
+**Archivos creados:** `requirements.txt`, `.env.example`
+**Objetivo:** iniciar la Unidad 3 (criterio 3.1.2, "controlar el uso de datos sensibles como credenciales o llaves de API") eliminando los secretos escritos en el código y declarando las dependencias oficiales que usará el consumo de APIs.
+
+### Hallazgos
+
+Los códigos `CODIGO_ADMIN = "1234"` y `CODIGO_RRHH = "12345"` estaban en `main.py`, versionados en GitHub y documentados en el Readme. El propio equipo lo había registrado como limitación temporal. Antes de agregar llaves de API era necesario contar con un mecanismo de configuración que no pasara por el código fuente.
+
+### Implementación
+
+- `requirements.txt` declara `requests` (librería oficial recomendada por la guía para el consumo de servicios) y `python-dotenv` (carga de `.env`).
+- `.env.example` documenta las variables sin valores; `.env` ya estaba excluido en `.gitignore`.
+- `main.py` carga `.env` con `load_dotenv(..., override=False)`, de modo que una variable definida en el sistema operativo tiene prioridad sobre el archivo. `DATABASE_PATH` puede sobrescribirse con `ECOTECH_DB_PATH`, lo que facilita pruebas y un futuro despliegue.
+- Se reemplazaron las constantes por `VARIABLES_CODIGO_ROL`, `obtener_codigo_rol()` y `verificar_codigo_rol()`. La lectura ocurre en el momento del registro, no al importar el módulo, y la comparación usa `hmac.compare_digest` (tiempo constante), la misma técnica que ya se usaba para las contraseñas.
+- Si la variable no existe, `obtener_codigo_rol()` lanza `ValueError` indicando qué variable definir, sin mostrar ningún valor. La interfaz ya captura `ValueError` y muestra el mensaje sin interrumpir el programa.
+- `interfaz.py` dejó de importar los códigos y llama a `verificar_codigo_rol(rol, codigo)`.
+
+### Revisión técnica
+
+Se evaluó con apoyo de IA la alternativa de dejar valores por defecto cuando la variable no existe. Se descartó porque volvería a dejar un secreto conocido en el código y anularía el objetivo del cambio; se prefirió un mensaje explícito de configuración. También se evaluó leer las variables una sola vez al importar el módulo; se descartó porque impide probar el comportamiento cambiando el entorno y porque un `.env` editado en caliente no se reflejaría. Las dependencias se instalan con `pip`; ambas son librerías oficiales publicadas en PyPI y de uso amplio.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py` finalizó correctamente.
+- Prueba automatizada: los códigos se leen desde `.env`; `verificar_codigo_rol()` acepta el código correcto y rechaza uno incorrecto; un rol sin código y una variable vacía producen mensajes claros; ningún literal `"1234"` ni `"12345"` permanece en `main.py` ni `interfaz.py`.
+- Flujo completo de registro de `admin` en SQLite en memoria: un código incorrecto muestra `Codigo secreto incorrecto` y vuelve a solicitarlo; con el código correcto el usuario se crea normalmente.
+- `git status` confirma que `.env` no aparece como archivo a versionar.
