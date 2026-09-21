@@ -2,6 +2,7 @@
 
 from datetime import date
 from getpass import getpass
+from pathlib import Path
 from typing import Any, Callable
 import logging
 import sqlite3
@@ -17,6 +18,8 @@ from main import (
 	Empleado,
 	ExportadorExcel,
 	ExportadorPDF,
+	IExportador,
+	Informe,
 	Proyecto,
 	RegistroTiempo,
 	ServicioReportes,
@@ -31,6 +34,10 @@ from main import (
 	calcular_pago,
 	calcular_tarifa_hora,
 	conectar_bd,
+	construir_informe_departamentos,
+	construir_informe_empleados,
+	construir_informe_proyectos,
+	construir_informe_registros,
 	contar_registros_proyecto,
 	desasignar_empleado_proyecto_bd,
 	fila_a_empleado,
@@ -82,6 +89,7 @@ MENSAJE_PROYECTO_INEXISTENTE = "El proyecto indicado no existe."
 MENSAJE_DEPARTAMENTO_INEXISTENTE = "El departamento indicado no existe."
 MENSAJE_ENTER_CONSERVA = "Enter conserva el valor actual."
 MENSAJE_CANCELADO = "Operacion cancelada."
+CARPETA_INFORMES = DATABASE_PATH.with_name("informes")
 ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = "SELECT * FROM empleados WHERE rut = ?"
 CONSULTA_PROYECTO = (
@@ -1101,36 +1109,57 @@ def registrar_tiempo_menu(
 	print("Registro de tiempo guardado correctamente.")
 
 
+def leer_exportador() -> IExportador:
+	"""Solicita el formato del informe y devuelve el exportador correspondiente."""
+
+	while True:
+		formato = input("Formato (1=PDF texto, 2=Excel CSV): ").strip()
+		if formato == "1":
+			return ExportadorPDF()
+		if formato == "2":
+			return ExportadorExcel()
+		print(MENSAJE_OPCION_INVALIDA)
+
+
+def exportar_informe(informe: Informe, carpeta: Path | None = None) -> None:
+	"""Muestra el informe en pantalla y lo guarda en la carpeta de informes."""
+
+	if not informe.filas:
+		print(f"No hay datos para {informe.titulo.lower()}.")
+		return
+	servicio = ServicioReportes(leer_exportador())
+	print("\n" + servicio.generar(informe))
+	ruta = servicio.guardar(informe, carpeta or CARPETA_INFORMES)
+	print(f"Informe guardado en: {ruta}")
+
+
+def informe_registros_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Informe de horas; los empleados solo obtienen el propio."""
+
+	filas = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
+	exportar_informe(construir_informe_registros(filas))
+
+
 def mostrar_reportes_menu(
 	connection: sqlite3.Connection, usuario_actual: Usuario
 ) -> None:
-	"""Genera el reporte seleccionado con los registros de SQLite."""
+	"""Genera y guarda el informe de la entidad elegida; los empleados solo el de sus horas."""
 
-	filas = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
-	if not filas:
-		print("No hay registros de tiempo para reportar.")
+	if usuario_actual.rol not in ROLES_GESTION:
+		informe_registros_menu(connection, usuario_actual)
 		return
-	registros = []
-	for fila in filas:
-		empleado = Empleado(
-			fila["rut_empleado"], fila["empleado"], "Reporte", "reporte@ecotech.cl", "Consulta"
-		)
-		proyecto = Proyecto(
-			fila["id_proyecto"], fila["proyecto"], "Reporte", date.fromisoformat(fila["fecha"])
-		)
-		registros.append(
-			RegistroTiempo(
-				fila["id_registro"],
-				date.fromisoformat(fila["fecha"]),
-				fila["horas"],
-				empleado,
-				proyecto,
-				fila["descripcion_tarea"] or "",
-			)
-		)
-	formato = input("Formato (1=PDF texto, 2=Excel CSV): ").strip()
-	exportador = ExportadorPDF() if formato == "1" else ExportadorExcel()
-	print("\n" + ServicioReportes(exportador).generar(registros))
+	ejecutar_submenu(
+		"GENERAR INFORME",
+		[
+			("1", "Horas trabajadas", lambda: informe_registros_menu(connection, usuario_actual)),
+			("2", "Empleados (sin datos personales cifrados)",
+				lambda: exportar_informe(construir_informe_empleados(listar_empleados(connection)))),
+			("3", "Departamentos",
+				lambda: exportar_informe(construir_informe_departamentos(listar_departamentos(connection)))),
+			("4", "Proyectos",
+				lambda: exportar_informe(construir_informe_proyectos(listar_proyectos(connection)))),
+		],
+	)
 
 
 def crear_usuario_admin_menu(

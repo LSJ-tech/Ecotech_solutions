@@ -47,6 +47,7 @@ Ecotech_solutions/
 ├── Rubrica.pdf
 ├── TI3V21_U1_ES_GUÍA primera parte.pdf
 ├── TI3V21_U2_U3_ES02_GUÍA.docx
+├── informes/            (generado; informes exportados, no versionado)
 ├── uml.mmd
 └── uml.png
 ```
@@ -63,9 +64,9 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 - Un proyecto puede tener una ciudad asociada (Unidad 3), usada para consultar el clima.
 - Las consultas de clima e indicadores se guardan localmente (`consultas_clima`, `indicadores`) como respaldo.
 
-El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
+El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid); `uml.png` es su render desde https://mermaid.live. Los atributos de formato de archivo (`IExportador.codificacion`, `Informe.nombre_archivo`) y las funciones constructoras `construir_informe_*` se omiten del diagrama por ser detalles de implementación.
 
-Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: sin `Informe` ni `ServicioReportes.guardar()` (informes a archivo). La ficha completa de `Empleado`, `CifradorDatos`, el registro de cuentas restringido a RR.HH., `Departamento.gerente`, `RegistroTiempo.descripcion_tarea`, `desasignar_empleado_de_proyecto()` y el CRUD completo desde el menú ya están implementados.
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos no implementados (cambios 36 a 41 de `VALIDACION_IA.md`); `uml.mmd` es el modelo objetivo y el código ya coincide con él: ficha completa de `Empleado`, `CifradorDatos`, registro de cuentas restringido a RR.HH., `Departamento.gerente`, `RegistroTiempo.descripcion_tarea`, `desasignar_empleado_de_proyecto()`, CRUD completo desde el menú e `Informe` con `ServicioReportes.guardar()`.
 
 ## Estado de los criterios
 
@@ -96,9 +97,9 @@ Estas operaciones mantienen las relaciones entre objetos y evitan registrar dupl
 Se incorporaron los siguientes elementos:
 
 - Encapsulamiento de la contraseña de `Usuario` mediante `_contrasena`, una propiedad de lectura y `actualizar_contrasena()`.
-- Abstracción mediante la clase `IExportador` y su método abstracto `exportar()`.
-- Herencia en `ExportadorPDF` y `ExportadorExcel`.
-- Polimorfismo en `ServicioReportes`, que trabaja con cualquier implementación de `IExportador`.
+- Abstracción mediante la clase `IExportador` (método abstracto `exportar()`, atributos `extension` y `codificacion`) y el `dataclass` inmutable `Informe` (título, columnas y filas), común a las cuatro entidades.
+- Herencia en `ExportadorPDF` (texto alineado en columnas) y `ExportadorExcel` (CSV con el módulo `csv` y BOM para Excel).
+- Polimorfismo en `ServicioReportes`, que genera y guarda (`guardar()`) con cualquier implementación de `IExportador` sin conocer el formato.
 - Reutilización de la lógica común del servicio sin duplicar el proceso de generación de informes.
 
 ### Criterio 2.1.3: integración con base de datos
@@ -158,7 +159,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-`test_nucleo.py` (43 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento, la descripción de tareas y el CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios): migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+`test_nucleo.py` (49 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento, la descripción de tareas y el CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios) y los informes (`Informe`, exportadores, escritura a archivo, exclusión de datos cifrados): migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
 
 `test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
@@ -198,7 +199,7 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Crear automáticamente la ficha del empleado para los roles `empleado` y `rrhh`, con dirección, teléfono, fecha de inicio de contrato y salario mensual; el sistema asigna un ID único automático.
 - Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
 - Permitir que solo un administrador cambie roles o elimine otras cuentas.
-- Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
+- Generar informes de horas trabajadas, empleados, departamentos y proyectos en formato de texto tipo PDF o CSV tipo Excel, mostrarlos en pantalla y guardarlos en la carpeta `informes/`.
 - Consultar el clima actual de la ciudad de un proyecto (opción 10, disponible para todos los roles).
 - Consultar el valor vigente del dólar, el euro o la UF (opción 11, todos los roles).
 - Calcular el pago de un empleado en moneda extranjera a partir de sus horas registradas y de su salario mensual (opción 12, solo `admin` y `rrhh`).
@@ -224,7 +225,7 @@ Menú completo (los roles ven solo lo permitido):
 | 7 | Registrar horas trabajadas (los empleados, solo las propias) | todos |
 | 8 | Ver registros de tiempo (los empleados, solo los propios) | todos |
 | 9 | Editar o eliminar registros de tiempo (los empleados, solo los propios) | todos |
-| 10 | Generar reporte (los empleados, solo el propio) | todos |
+| 10 | Generar informe: horas trabajadas, empleados, departamentos o proyectos, en texto o CSV, guardado en `informes/` (los empleados, solo el de sus horas) | todos |
 | 11 | Consultar clima de un proyecto | todos |
 | 12 | Consultar indicador económico | todos |
 | 13 | Calcular pago en moneda extranjera | admin, rrhh |
@@ -241,6 +242,8 @@ Los empleados solo pueden consultar sus propias horas registradas, registrar hor
 Los submenús `Gestionar departamentos`, `Gestionar empleados` y `Gestionar proyectos` (solo `admin` y `rrhh`) agrupan el CRUD de cada entidad. Al editar, cada campo muestra su valor actual entre corchetes y Enter lo conserva; un valor inválido repite solo ese campo. Toda eliminación pide confirmación (`s/n`) e informa qué se pierde (horas registradas, cuenta de acceso, asignaciones). El gerente debe ser un empleado registrado; si ese empleado se elimina, el departamento queda sin gerente (`ON DELETE SET NULL`). `Editar o eliminar registros de tiempo` está disponible para todos los roles, pero un empleado solo ve y puede elegir sus propios registros.
 
 Al registrar horas se solicita una breve descripción de las tareas realizadas (hasta 200 caracteres), que se muestra en el listado y se incluye en los informes de texto y CSV.
+
+Los informes se muestran en pantalla y se guardan en `informes/` (junto a la base de datos) con nombre `informe_de_<entidad>_<fecha>_<hora>.txt|csv`. El informe de empleados omite dirección, teléfono y salario: un archivo en disco no está protegido por el cifrado en reposo de la base, y esos datos se consultan desde el sistema con el rol correspondiente.
 
 La salida inicial esperada es:
 
@@ -315,7 +318,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suites `test_nucleo.py` (43) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (49) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.

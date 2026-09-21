@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache, wraps
 from pathlib import Path
 from typing import Any, Callable
+import csv
 import hashlib
 import hmac
+import io
 import os
 import re
 import secrets
@@ -1326,40 +1328,146 @@ def calcular_pago(
 	)
 
 
+@dataclass(frozen=True)
+class Informe:
+	"""Tabla inmutable (título, columnas y filas) que cualquier exportador puede escribir."""
+
+	titulo: str
+	columnas: tuple[str, ...]
+	filas: tuple[tuple[Any, ...], ...]
+
+	def __post_init__(self) -> None:
+		# frozen: los valores normalizados se asignan con object.__setattr__.
+		object.__setattr__(self, "titulo", validar_texto(self.titulo, "El título del informe"))
+		columnas = tuple(str(columna) for columna in self.columnas)
+		if not columnas:
+			raise ValueError("El informe debe tener al menos una columna.")
+		filas = tuple(tuple(fila) for fila in self.filas)
+		for fila in filas:
+			if len(fila) != len(columnas):
+				raise ValueError("Cada fila del informe debe tener un valor por columna.")
+		object.__setattr__(self, "columnas", columnas)
+		object.__setattr__(self, "filas", filas)
+
+	@property
+	def nombre_archivo(self) -> str:
+		"""Nombre base seguro para el archivo: solo letras, dígitos y guiones bajos."""
+
+		return re.sub(r"[^a-z0-9]+", "_", self.titulo.lower()).strip("_") or "informe"
+
+
+def formatear_celda(valor: Any) -> str:
+	"""Convierte un valor a texto de informe; None se muestra vacío."""
+
+	if valor is None:
+		return ""
+	if isinstance(valor, float):
+		return f"{valor:,.2f}"
+	return str(valor)
+
+
+def construir_informe_registros(filas: list[Any]) -> Informe:
+	"""Informe de registros de tiempo a partir de las filas de listar_registros_tiempo()."""
+
+	return Informe(
+		"Informe de horas trabajadas",
+		("fecha", "rut", "empleado", "proyecto", "horas", "descripcion_tarea"),
+		[
+			(f["fecha"], f["rut_empleado"], f["empleado"], f["proyecto"], f["horas"],
+				f["descripcion_tarea"] or "")
+			for f in filas
+		],
+	)
+
+
+def construir_informe_empleados(empleados: list[dict[str, Any]]) -> Informe:
+	"""Informe de empleados sin los datos cifrados (dirección, teléfono y salario).
+
+	Un archivo en disco no está protegido por el cifrado en reposo de la base,
+	así que el informe solo lleva datos laborales.
+	"""
+
+	return Informe(
+		"Informe de empleados",
+		("id", "rut", "nombre", "apellido", "correo", "cargo", "departamento",
+			"fecha_inicio_contrato"),
+		[
+			(e["id_empleado"], e["rut"], e["nombre"], e["apellido"], e["correo"], e["cargo"],
+				e["departamento"], e["fecha_inicio_contrato"])
+			for e in empleados
+		],
+	)
+
+
+def construir_informe_departamentos(filas: list[Any]) -> Informe:
+	"""Informe de departamentos a partir de las filas de listar_departamentos()."""
+
+	return Informe(
+		"Informe de departamentos",
+		("id", "nombre", "rut_gerente", "gerente"),
+		[(f["id_departamento"], f["nombre"], f["rut_gerente"], f["gerente"]) for f in filas],
+	)
+
+
+def construir_informe_proyectos(filas: list[Any]) -> Informe:
+	"""Informe de proyectos a partir de las filas de listar_proyectos()."""
+
+	return Informe(
+		"Informe de proyectos",
+		("id", "nombre", "descripcion", "fecha_inicio", "fecha_fin", "ciudad"),
+		[
+			(f["id_proyecto"], f["nombre"], f["descripcion"], f["fecha_inicio"], f["fecha_fin"],
+				f["ciudad"])
+			for f in filas
+		],
+	)
+
+
 class IExportador(ABC):
-	"""Define el contrato común para generar informes."""
+	"""Define el contrato común para generar informes en distintos formatos."""
+
+	extension: str = ""
+	codificacion: str = CODIFICACION
 
 	@abstractmethod
-	def exportar(self, registros: list[RegistroTiempo]) -> str:
-		"""Convierte registros de tiempo a un formato de salida."""
+	def exportar(self, informe: Informe) -> str:
+		"""Convierte un informe a un formato de salida."""
 
 
 class ExportadorPDF(IExportador):
-	"""Genera una representación de texto con formato de informe PDF."""
+	"""Genera una representación de texto alineada, con formato de informe PDF."""
 
-	def exportar(self, registros: list[RegistroTiempo]) -> str:
-		lineas = ["Informe de horas trabajadas", "=" * 28]
+	extension = "txt"
+
+	def exportar(self, informe: Informe) -> str:
+		tabla = [informe.columnas] + [
+			tuple(formatear_celda(valor) for valor in fila) for fila in informe.filas
+		]
+		anchos = [max(len(fila[i]) for fila in tabla) for i in range(len(informe.columnas))]
+		lineas = [informe.titulo, "=" * len(informe.titulo)]
 		lineas.extend(
-			f"{registro.fecha}: {registro.empleado.nombre} "
-			f"- {registro.proyecto.nombre} - {registro.horas} horas"
-			+ (f" - {registro.descripcion_tarea}" if registro.descripcion_tarea else "")
-			for registro in registros
+			" | ".join(celda.ljust(ancho) for celda, ancho in zip(fila, anchos)).rstrip()
+			for fila in tabla
 		)
+		lineas.insert(3, "-+-".join("-" * ancho for ancho in anchos))
 		return "\n".join(lineas)
 
 
 class ExportadorExcel(IExportador):
 	"""Genera datos separados por comas para una hoja de cálculo."""
 
-	def exportar(self, registros: list[RegistroTiempo]) -> str:
-		lineas = ["fecha,empleado,proyecto,horas,descripcion_tarea"]
-		lineas.extend(
-			f"{registro.fecha},{registro.empleado.nombre},"
-			f"{registro.proyecto.nombre},{registro.horas},"
-			f"\"{registro.descripcion_tarea.replace(chr(34), chr(34) * 2)}\""
-			for registro in registros
+	extension = "csv"
+	# Con BOM para que Excel reconozca los acentos al abrir el archivo.
+	codificacion = "utf-8-sig"
+
+	def exportar(self, informe: Informe) -> str:
+		salida = io.StringIO()
+		escritor = csv.writer(salida, lineterminator="\n")
+		escritor.writerow(informe.columnas)
+		escritor.writerows(
+			tuple("" if valor is None else valor for valor in fila) for fila in informe.filas
 		)
-		return "\n".join(lineas)
+		return salida.getvalue().rstrip("\n")
 
 
 class ServicioReportes:
@@ -1368,62 +1476,20 @@ class ServicioReportes:
 	def __init__(self, exportador: IExportador) -> None:
 		self._exportador = exportador
 
-	def generar(self, registros: list[RegistroTiempo]) -> str:
-		return self._exportador.exportar(registros)
+	def generar(self, informe: Informe) -> str:
+		return self._exportador.exportar(informe)
 
+	def guardar(self, informe: Informe, carpeta: Path) -> Path:
+		"""Escribe el informe en la carpeta indicada y devuelve la ruta del archivo."""
 
-__all__ = [
-	"DATABASE_PATH",
-	"ROLES_VALIDOS",
-	"VARIABLES_CODIGO_ROL",
-	"CifradorDatos",
-	"Departamento",
-	"Empleado",
-	"ExportadorExcel",
-	"ExportadorPDF",
-	"IExportador",
-	"Pago",
-	"Proyecto",
-	"RegistroTiempo",
-	"ServicioReportes",
-	"Usuario",
-	"asignar_empleado_a_departamento",
-	"asignar_empleado_a_proyecto",
-	"asignar_empleado_departamento_bd",
-	"asignar_empleado_proyecto_bd",
-	"asignar_gerente_departamento",
-	"calcular_pago",
-	"calcular_tarifa_hora",
-	"cifrar_datos_personales_pendientes",
-	"conectar_bd",
-	"fila_a_empleado",
-	"generar_clave_cifrado",
-	"obtener_cifrador",
-	"generar_hash_contrasena",
-	"guardar_departamento",
-	"guardar_empleado",
-	"guardar_proyecto",
-	"guardar_registro_tiempo",
-	"guardar_usuario",
-	"guardar_usuario_con_empleado",
-	"inicializar_bd",
-	"listar_departamentos",
-	"listar_empleados",
-	"listar_proyectos",
-	"listar_registros_tiempo",
-	"listar_usuarios",
-	"obtener_codigo_rol",
-	"sumar_horas_empleado",
-	"validar_ciudad_opcional",
-	"validar_descripcion_tarea",
-	"validar_horas",
-	"validar_monto",
-	"validar_rut",
-	"validar_telefono",
-	"validar_texto",
-	"verificar_codigo_rol",
-	"verificar_contrasena",
-]
+		carpeta = Path(carpeta)
+		carpeta.mkdir(parents=True, exist_ok=True)
+		marca = datetime.now().strftime("%Y%m%d_%H%M%S")
+		ruta = carpeta / f"{informe.nombre_archivo}_{marca}.{self._exportador.extension}"
+		ruta.write_text(
+			self.generar(informe) + "\n", encoding=self._exportador.codificacion
+		)
+		return ruta
 
 
 def asignar_empleado_a_departamento(

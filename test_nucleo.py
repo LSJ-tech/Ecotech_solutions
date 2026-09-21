@@ -4,10 +4,13 @@ Ejecutar con: py -3 -m unittest -v test_nucleo
 """
 
 from datetime import date
+from pathlib import Path
 import builtins
 import contextlib
 import io
 import os
+import shutil
+import tempfile
 import unittest
 
 import main
@@ -425,9 +428,13 @@ class PruebasGerenteYDescripcionTarea(unittest.TestCase):
 
 	def test_exportadores_incluyen_la_descripcion(self):
 		proyecto = self._proyecto_asignado()
-		registros = [main.RegistroTiempo(1, date(2026, 1, 2), 8, self.empleado, proyecto, 'Tarea "A"')]
-		self.assertIn("- Tarea \"A\"", main.ExportadorPDF().exportar(registros))
-		csv = main.ExportadorExcel().exportar(registros)
+		main.guardar_registro_tiempo(
+			self.connection,
+			main.RegistroTiempo(0, date(2026, 1, 2), 8, self.empleado, proyecto, 'Tarea "A"'),
+		)
+		informe = main.construir_informe_registros(main.listar_registros_tiempo(self.connection))
+		self.assertIn('| Tarea "A"', main.ExportadorPDF().exportar(informe))
+		csv = main.ExportadorExcel().exportar(informe)
 		self.assertIn("descripcion_tarea", csv.splitlines()[0])
 		self.assertTrue(csv.splitlines()[1].endswith(',"Tarea ""A"""'))
 
@@ -625,6 +632,82 @@ class PruebasCrudCompleto(unittest.TestCase):
 		numeros = [numero for numero, _t, _a in empleado]
 		self.assertEqual(numeros, ["2", "4", "6", "7", "8", "9", "10", "11", "12"])
 		self.assertIn(("9", "Editar o eliminar mis registros"), [(n, t) for n, t, _a in empleado])
+
+
+class PruebasInformes(unittest.TestCase):
+	"""Informe genérico, exportadores y escritura a archivo."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		self.carpeta = Path(tempfile.mkdtemp()) / "informes"
+		self.admin = main.Usuario(1, "admin", "x", rol="admin")
+
+	def tearDown(self):
+		self.connection.close()
+		shutil.rmtree(self.carpeta.parent, ignore_errors=True)
+
+	def test_informe_valida_su_estructura_y_es_inmutable(self):
+		informe = main.Informe("Informe: horas / 2026", ["a", "b"], [(1, None)])
+		self.assertEqual((informe.columnas, informe.filas), (("a", "b"), ((1, None),)))
+		self.assertEqual(informe.nombre_archivo, "informe_horas_2026")
+		with self.assertRaises(AttributeError):
+			informe.titulo = "otro"
+		for titulo, columnas, filas in [(" ", ["a"], []), ("T", [], []), ("T", ["a"], [(1, 2)])]:
+			with self.subTest(titulo=titulo, columnas=columnas), self.assertRaises(ValueError):
+				main.Informe(titulo, columnas, filas)
+
+	def test_exportador_pdf_alinea_columnas_y_omite_none(self):
+		informe = main.Informe("Prueba", ["nombre", "ciudad"], [("Paneles", None), ("Eolico", "Temuco")])
+		lineas = main.ExportadorPDF().exportar(informe).splitlines()
+		self.assertEqual(lineas[:2], ["Prueba", "======"])
+		self.assertEqual(lineas[2], "nombre  | ciudad")
+		self.assertEqual(lineas[3], "--------+-------")
+		self.assertEqual(lineas[4], "Paneles |")
+		self.assertEqual(lineas[5], "Eolico  | Temuco")
+
+	def test_exportador_excel_escapa_comas_y_comillas(self):
+		informe = main.Informe("Prueba", ["nombre", "nota"], [("Uno, dos", 'Dijo "hola"'), ("Tres", None)])
+		lineas = main.ExportadorExcel().exportar(informe).splitlines()
+		self.assertEqual(lineas, ["nombre,nota", '"Uno, dos","Dijo ""hola"""', "Tres,"])
+
+	def test_guardar_crea_la_carpeta_y_usa_la_extension_del_exportador(self):
+		informe = main.Informe("Informe de proyectos", ["id", "nombre"], [(1, "Paneles")])
+		ruta_csv = main.ServicioReportes(main.ExportadorExcel()).guardar(informe, self.carpeta)
+		ruta_txt = main.ServicioReportes(main.ExportadorPDF()).guardar(informe, self.carpeta)
+		self.assertEqual((ruta_csv.suffix, ruta_txt.suffix), (".csv", ".txt"))
+		self.assertTrue(ruta_csv.name.startswith("informe_de_proyectos_"))
+		self.assertEqual(ruta_csv.read_bytes()[:3], b"\xef\xbb\xbf")  # BOM para Excel
+		self.assertEqual(ruta_csv.read_text(encoding="utf-8-sig"), "id,nombre\n1,Paneles\n")
+		self.assertIn("1  | Paneles", ruta_txt.read_text(encoding="utf-8"))
+
+	def test_informe_de_empleados_excluye_los_datos_cifrados(self):
+		main.guardar_empleado(self.connection, empleado_completo())
+		informe = main.construir_informe_empleados(main.listar_empleados(self.connection))
+		self.assertNotIn("salario", informe.columnas)
+		texto = main.ExportadorExcel().exportar(informe)
+		for dato in ("Av. Siempre Viva", "+56 9 1234 5678", "1200000", "1,200,000"):
+			self.assertNotIn(dato, texto)
+		self.assertIn("ana@x.cl,Dev", texto)
+
+	def test_menu_genera_y_guarda_informes_por_entidad(self):
+		main.guardar_departamento(self.connection, "Ventas")
+		cuenta = main.Usuario(2, "e", "x", empleado=empleado_completo(), rol="empleado")
+		ui.CARPETA_INFORMES = self.carpeta
+		# Un empleado sin horas no pasa por el submenú y no genera archivo.
+		salida = ejecutar_con_entradas(lambda: ui.mostrar_reportes_menu(self.connection, cuenta))
+		self.assertIn("No hay datos", salida)
+		self.assertFalse(self.carpeta.exists())
+		# Gestión elige la entidad y el formato; una opción de formato inválida se repite.
+		salida = ejecutar_con_entradas(
+			lambda: ui.mostrar_reportes_menu(self.connection, self.admin), ["3", "9", "1"]
+		)
+		self.assertIn("Opcion no valida", salida)
+		self.assertIn("Informe de departamentos", salida)
+		self.assertIn("Informe guardado en:", salida)
+		archivos = list(self.carpeta.glob("informe_de_departamentos_*.txt"))
+		self.assertEqual(len(archivos), 1)
+		self.assertIn("Ventas", archivos[0].read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

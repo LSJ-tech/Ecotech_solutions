@@ -28,6 +28,7 @@
 24. Cambio 38 (alineación con la Unidad 1, paso 3): registro de cuentas restringido a RR.HH. y validación del login.
 25. Cambio 39 (alineación con la Unidad 1, paso 4): gerente de departamento y descripción de tareas en el registro de tiempo.
 26. Cambio 40 (alineación con la Unidad 1, paso 5): CRUD completo desde el menú y desasignación de proyectos.
+27. Cambio 41 (alineación con la Unidad 1, paso 6): informes de las cuatro entidades exportados a archivo.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1134,3 +1135,29 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile main.py interfaz.py test_nucleo.py` y `ruff check --select F` sin nombres indefinidos.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 71 pruebas en verde. Las once nuevas verifican: desasignar conserva las horas, impide registros nuevos y es idempotente (base y dominio); eliminar un departamento con empleados se rechaza y sin empleados funciona; eliminar un empleado borra su cuenta y sus horas; editar la ficha con Enter conserva los valores, repite solo el teléfono y el salario inválidos y mantiene la dirección cifrada; eliminar empleado exige confirmación y rechaza la propia ficha; editar y eliminar departamento conservan el gerente e informan un ID inexistente; editar proyecto repite solo la fecha de fin anterior al inicio, desasignar informa al empleado y falla si no estaba asignado, y eliminar borra asignaciones y registros; un empleado no puede editar registros ajenos y sí los propios (horas con coma decimal); el submenú vuelve con `0` y rechaza opciones inválidas; el menú principal agrupa el CRUD por entidad y el rol `empleado` ve las opciones 2, 4, 6, 7, 8, 9, 10, 11 y 12.
 - Ejecución manual sobre una base nueva: registro del administrador inicial, creación de departamento, proyecto y empleado, edición con Enter, desasignación y eliminaciones con confirmación.
+
+## Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `test_nucleo.py`, `.gitignore`, `uml.png` (render de `uml.mmd`)
+**Objetivo:** cumplir el requisito "generar informes de empleados, departamentos, proyectos y registros de tiempo, exportables a PDF o Excel" de la guía de la Unidad 1. Hasta ahora el sistema solo mostraba en pantalla un informe de horas; no generaba archivos ni cubría las otras tres entidades. Con este cambio el código coincide con `uml.mmd`.
+
+### Implementación
+
+- `Informe` (dataclass inmutable): título, columnas y filas. Valida que haya columnas y que cada fila tenga un valor por columna; `nombre_archivo` deriva un nombre seguro del título (solo letras, dígitos y guiones bajos). `construir_informe_registros()`, `construir_informe_empleados()`, `construir_informe_departamentos()` y `construir_informe_proyectos()` construyen el informe a partir de las filas que ya devuelven las funciones `listar_*`.
+- `IExportador` gana `extension` y `codificacion`; `exportar()` recibe un `Informe` en lugar de una lista de registros, de modo que un mismo exportador sirve para las cuatro entidades. `ExportadorPDF` alinea las columnas (`.txt`); `ExportadorExcel` usa el módulo `csv` (escapado estándar) y codificación `utf-8-sig` para que Excel reconozca los acentos.
+- `ServicioReportes.guardar(informe, carpeta)` crea la carpeta si no existe y escribe `<nombre>_<AAAAMMDD_HHMMSS>.<extension>`, devolviendo la ruta.
+- Interfaz: la opción 10 pasa a un submenú (horas, empleados, departamentos, proyectos) para `admin` y `rrhh`; el rol `empleado` obtiene directamente el informe de sus horas. `leer_exportador()` repite el formato hasta recibir `1` o `2`; `exportar_informe()` muestra el contenido, lo guarda en `informes/` (junto a la base de datos) e imprime la ruta. Se eliminó la construcción artificial de objetos `Empleado`/`Proyecto` con valores ficticios ("Reporte", "reporte@ecotech.cl") que usaba el informe anterior.
+- `informes/` se agrega a `.gitignore`. El diagrama `uml.mmd` no cambia: `IExportador.codificacion` y la propiedad derivada `Informe.nombre_archivo` son detalles de formato de archivo, y las funciones `construir_informe_*` son constructoras de datos, no parte del modelo de clases. Con este paso el código coincide con `uml.mmd`, por lo que se incorpora `uml.png` renderizado desde mermaid.live.
+
+### Revisión técnica
+
+- Datos personales en el informe de empleados: la IA incluyó dirección, teléfono y salario porque el listado detallado de RR.HH. los muestra. Se descartó: un archivo en `informes/` queda fuera del cifrado en reposo de la base y podría copiarse o enviarse; el informe lleva solo datos laborales (ID, RUT, nombre, correo, cargo, departamento, fecha de contrato). La prueba verifica que ninguno de los tres datos aparece.
+- CSV: se reemplazó la concatenación manual con comillas duplicadas (Cambio 39) por `csv.writer`, que resuelve comas, comillas y saltos de línea en cualquier columna, no solo en la descripción. Se conservó la prueba original del escapado para comprobar que el resultado es el mismo.
+- Nombre del archivo: la IA proponía usar el título tal cual. Se sanitiza con una expresión regular para evitar caracteres inválidos en Windows y se agrega fecha y hora para no sobrescribir informes anteriores.
+- PDF real: se evaluó generar PDF binario con una librería externa (`reportlab`, `fpdf2`). Se mantuvo la representación de texto porque la guía admite "PDF o Excel" y el proyecto no exige dependencias adicionales para la defensa; el diseño con `IExportador` permite agregar un `ExportadorPDFBinario` sin tocar el servicio ni el menú.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py test_nucleo.py` y `ruff check --select F` sin nombres indefinidos.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 77 pruebas en verde. Las seis nuevas verifican la validación e inmutabilidad de `Informe` y su nombre de archivo; la alineación de columnas y el vacío para `None` en texto; el escapado de comas y comillas en CSV; que `guardar()` crea la carpeta, usa la extensión del exportador y escribe el BOM en CSV; que el informe de empleados excluye dirección, teléfono y salario; y que el menú no genera archivo sin datos, repite un formato inválido y guarda el informe de departamentos en la carpeta indicada.
