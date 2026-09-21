@@ -32,6 +32,7 @@
 28. Cambio 42 (alineación con la Unidad 1, paso 7): política de contraseñas y restauración de `__all__`.
 29. Cambio 43 (alineación con la Unidad 1, paso 8): búsqueda de departamentos y empleados.
 30. Cambio 44: inventario de fragmentos apoyados por IA (sección al inicio de este archivo).
+31. Cambio 45: reorganización del Readme orientada a la evaluación.
 
 ## Inventario de fragmentos apoyados por IA
 
@@ -1261,3 +1262,22 @@ La tabla se construyó leyendo las secciones "Revisión técnica" de cada cambio
 ### Validación
 
 - Cada fila referencia un cambio existente y funciones presentes en el código actual (`grep` de los nombres citados en `main.py`, `interfaz.py` y `servicios_externos.py`).
+
+## Cambio 45 - Reorganización del Readme orientada a la evaluación
+
+**Fecha:** 2026-09-21
+**Archivo modificado:** `Readme.md`
+**Objetivo:** que el docente encuentre en menos de un minuto qué se evalúa, dónde está la evidencia y cómo ejecutar el sistema. El Readme había crecido de forma incremental durante 44 cambios y mezclaba estado, instrucciones, criterios y un historial de verificaciones de más de 30 puntos.
+
+### Implementación
+
+Nueva estructura con índice: (1) resumen por unidad con enlaces a la evidencia; (2) inicio rápido con `.env` y primer inicio; (3) menú y comportamientos clave; (4) arquitectura y UML; (5) cumplimiento por unidad en tres tablas (requisitos U1, criterios U2, criterios U3); (6) seguridad; (7) servicios externos; (8) pruebas; (9) decisiones técnicas destacadas con referencia a su cambio; (10) uso de IA; (11) anexo con las verificaciones manuales condensadas. Se corrigieron referencias desactualizadas (opciones de clima, indicador y pago pasaron a 11-13; el menú de `admin` llega a 17; el modelo proviene de la Unidad 1, no de la 2) y una frase mal concatenada en la descripción de `test_nucleo.py`.
+
+### Revisión técnica
+
+No se eliminó contenido sustantivo: las validaciones históricas se resumieron en el anexo y las decisiones de diseño se concentraron en una tabla que remite al cambio que las justifica, para que el evaluador pueda verificar cada afirmación. Cada dato del Readme (iteraciones PBKDF2, timeout, conteo de pruebas, numeración del menú) se contrastó con el código antes de publicarlo.
+
+### Validación
+
+- Los enlaces internos del índice siguen la convención de anclas de GitHub.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde (sin cambios de código).
