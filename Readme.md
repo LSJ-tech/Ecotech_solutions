@@ -10,7 +10,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
 | Pruebas | **85 automatizadas** (`test_nucleo.py` 57 · `test_servicios_externos.py` 28), sin red, en verde |
 | Modelo | `uml.mmd` / `uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 44 cambios documentados e inventario de fragmentos apoyados por IA |
+| Trazabilidad | `VALIDACION_IA.md`: 46 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -149,7 +149,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 44 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 46 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
