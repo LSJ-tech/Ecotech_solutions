@@ -16,6 +16,7 @@
 12. Cambio 26: corrección de avisos de mantenibilidad SonarQube en la interfaz.
 13. Cambio 27 (Unidad 3, paso 1): configuración segura con variables de entorno y dependencias.
 14. Cambio 28 (Unidad 3, paso 2): consumo de la API de clima con `requests`, validación y manejo de errores.
+15. Cambio 29 (Unidad 3, paso 3): indicadores económicos de mindicador.cl y cálculo de pagos en moneda extranjera.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -780,3 +781,32 @@ Se decidió que la ciudad sea opcional y se guarde en el proyecto, en lugar de p
 - Migración: sobre una tabla `proyectos` antigua sin `ciudad`, `inicializar_bd()` agrega la columna; guardar, listar y actualizar la ciudad funciona; `Proyecto(..., ciudad="Ciudad1")` es rechazado.
 - Menú en SQLite en memoria: crear proyecto repite solo el campo ciudad ante `Calama9` y acepta `Calama`; el listado muestra `Ciudad: Calama` y `Sin ciudad`; la opción 15 sobre un proyecto sin ciudad informa el motivo, y con un servicio simulado muestra `18.4 °C, humedad 55%, cielo claro`.
 - Prueba en vivo: la llave recién creada en OpenWeatherMap respondió 401 durante la sesión (las llaves nuevas tardan hasta dos horas en activarse); el usuario vio únicamente el mensaje sanitizado `El servicio externo rechazó la credencial configurada`, lo que confirma el comportamiento del criterio 3.1.3. Queda pendiente repetir la consulta real cuando la llave esté activa.
+
+## Cambio 29 - Unidad 3, paso 3: indicadores económicos y cálculo de pagos
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `servicios_externos.py`, `main.py`, `interfaz.py`
+**Objetivo:** cubrir la segunda problemática de la guía (gestión de pagos internacionales) consumiendo indicadores económicos desde una API externa y usándolos para calcular pagos ajustados a la moneda del país del proyecto (criterios 3.1.1, 3.1.2 y 3.1.3).
+
+### Implementación
+
+- `ServicioIndicadores` implementa `IServicioExterno` sobre `https://mindicador.cl/api/{codigo}`, reutilizando `ClienteHTTP` y, por tanto, el mismo timeout, reintento y traducción de errores del servicio de clima. No requiere llave.
+- Antes de consultar se exploró la API real: `/api/dolar`, `/api/euro` y `/api/uf` devuelven `serie[0]` con el valor más reciente; un código inexistente responde HTTP 500 con un mensaje de error. Por eso `validar_indicador()` aplica una lista blanca (`INDICADORES_PERMITIDOS`): sin ella, un error de tipeo del usuario se reportaría como "servicio no disponible" y además gastaría el reintento.
+- `_interpretar()` valida que exista la serie, que el valor sea numérico y positivo y que la fecha sea ISO y no futura; devuelve un `Indicador` inmutable con código, nombre, moneda, valor, fecha del dato y fecha de consulta.
+- En `main.py`: `validar_monto()` (número estrictamente positivo, rechaza booleanos), `sumar_horas_empleado()` (`SUM` sobre `registros_tiempo` con RUT validado) y `calcular_pago()`, que produce un `Pago` con monto en CLP y en la moneda del indicador, redondeados a dos decimales. La lógica de negocio queda en el núcleo, no en la interfaz ni en el módulo de servicios.
+- En `interfaz.py`: `leer_indicador()` y `leer_monto()` repiten solo el campo inválido (acepta coma decimal); opción 16 `Consultar indicador economico` para todos los roles; opción 17 `Calcular pago en moneda extranjera` restringida con `verificar_gestion()`, que muestra los empleados, pide RUT y tarifa por hora, obtiene el indicador y presenta el desglose.
+
+### Revisión técnica
+
+Se pidió a la IA una propuesta para el cálculo de pagos y se evaluaron dos alternativas. La primera guardaba una tarifa por hora en la tabla `empleados`; se descartó en esta etapa porque exigía una migración, cambios en el registro de usuarios y en el CRUD de la Unidad 2 ya validado, sin aportar al criterio evaluado (consumo de la API). Se optó por solicitar la tarifa en el momento del cálculo, validada como monto positivo. La segunda propuesta hacía la conversión dentro de la función del menú; se movió a `calcular_pago()` en `main.py` para que sea probable sin interfaz y reutilizable desde una futura API web.
+
+También se revisó el borrador del servicio: usaba `datos["serie"][-1]` asumiendo orden cronológico ascendente, pero la exploración real mostró que la serie viene en orden descendente (el índice 0 es el más reciente). Se corrigió y se dejó registrado para evitar que la IA repita la suposición.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py servicios_externos.py` finalizó correctamente.
+- Servicio simulado: `DOLAR ` se normaliza a `dolar` y devuelve valor, fecha y moneda correctos; serie vacía, valor no numérico, valor negativo, fecha futura y cuerpo vacío producen `ErrorServicioExterno` con el mensaje genérico de formato.
+- `validar_indicador()` rechaza vacío, `peso`, `dolar; drop` y `bitcoin` indicando las opciones válidas.
+- `calcular_pago()`: 10 horas a $15.000 con dólar a 958,42 produce $150.000 CLP y 156,51 USD; horas cero, tarifa negativa, tipo de cambio cero y un booleano como horas son rechazados.
+- Menú en SQLite en memoria: un empleado sin horas registradas bloquea el cálculo con un mensaje claro; el rol `empleado` recibe `PermissionError`; con tarifa `abc`, `-3` y luego `15000,5` y con indicador `bitcoin` y luego `dolar`, la opción 17 repite solo el campo inválido y muestra `Total: $187,506.25 CLP = 195.64 USD`; la opción 16 está visible para todos y la 17 solo para gestión.
+- Consulta real a mindicador.cl durante la sesión: `Euro: 1099.86 CLP (2026-09-21)`.

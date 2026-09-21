@@ -21,6 +21,7 @@ from main import (
 	Usuario,
 	asignar_empleado_proyecto_bd,
 	asignar_empleado_departamento_bd,
+	calcular_pago,
 	conectar_bd,
 	guardar_departamento,
 	guardar_proyecto,
@@ -34,13 +35,22 @@ from main import (
 	listar_proyectos,
 	listar_registros_tiempo,
 	listar_usuarios,
+	sumar_horas_empleado,
 	validar_horas,
+	validar_monto,
 	validar_rut,
 	validar_texto,
 	verificar_codigo_rol,
 	verificar_contrasena,
 )
-from servicios_externos import ErrorServicioExterno, ServicioClima, validar_ciudad
+from servicios_externos import (
+	INDICADORES_PERMITIDOS,
+	ErrorServicioExterno,
+	ServicioClima,
+	ServicioIndicadores,
+	validar_ciudad,
+	validar_indicador,
+)
 
 MENSAJE_CONTRASENA = "Contrasena: "
 MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
@@ -273,6 +283,60 @@ def consultar_clima_menu(connection: sqlite3.Connection) -> None:
 		f"Clima en {clima.ciudad} para el proyecto {fila['nombre']}: "
 		f"{clima.temperatura:.1f} °C, humedad {clima.humedad}%, {clima.descripcion} "
 		f"(consultado {clima.fecha_consulta:%Y-%m-%d %H:%M})"
+	)
+
+
+def leer_indicador() -> str:
+	"""Solicita un indicador de la lista blanca y repite hasta recibir uno válido."""
+
+	opciones = ", ".join(
+		f"{codigo} ({moneda})" for codigo, moneda in sorted(INDICADORES_PERMITIDOS.items())
+	)
+	while True:
+		try:
+			return validar_indicador(input(f"Indicador [{opciones}]: "))
+		except ValueError as error:
+			print(error)
+
+
+def leer_monto(mensaje: str, campo: str) -> float:
+	"""Solicita un monto positivo y repite solo ese campo ante un valor inválido."""
+
+	while True:
+		valor = input(mensaje).strip().replace(",", ".")
+		try:
+			return validar_monto(float(valor), campo)
+		except ValueError:
+			print(f"{campo} debe ser un número mayor que 0.")
+
+
+def consultar_indicador_menu() -> None:
+	"""Muestra el valor vigente de un indicador económico."""
+
+	indicador = ServicioIndicadores().consultar(leer_indicador())
+	print(
+		f"{indicador.nombre}: ${indicador.valor:,.2f} CLP por {indicador.moneda} "
+		f"(valor del {indicador.fecha:%Y-%m-%d}, consultado "
+		f"{indicador.fecha_consulta:%Y-%m-%d %H:%M})"
+	)
+
+
+def calcular_pago_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Calcula el pago de un empleado en moneda extranjera según sus horas registradas."""
+
+	verificar_gestion(usuario_actual, "calcular pagos")
+	mostrar_empleados(connection)
+	rut = leer_rut()
+	horas = sumar_horas_empleado(connection, rut)
+	if horas <= 0:
+		raise ValueError("El empleado no tiene horas registradas para calcular un pago.")
+	tarifa = leer_monto("Tarifa por hora en CLP: ", "La tarifa por hora")
+	indicador = ServicioIndicadores().consultar(leer_indicador())
+	pago = calcular_pago(rut, horas, tarifa, indicador.moneda, indicador.valor)
+	print(
+		f"Horas registradas: {pago.horas:g} | Tarifa: ${pago.tarifa_hora_clp:,.2f} CLP\n"
+		f"Total: ${pago.monto_clp:,.2f} CLP = {pago.monto_moneda:,.2f} {pago.moneda} "
+		f"({indicador.nombre} a ${pago.valor_cambio:,.2f} del {indicador.fecha:%Y-%m-%d})"
 	)
 
 
@@ -745,6 +809,8 @@ def ejecutar_opcion_menu(
 		"13": lambda: cambiar_rol_menu(connection, usuario_actual),
 		"14": lambda: eliminar_usuario_admin_menu(connection, usuario_actual),
 		"15": lambda: consultar_clima_menu(connection),
+		"16": consultar_indicador_menu,
+		"17": lambda: calcular_pago_menu(connection, usuario_actual),
 	}
 	if opcion == "0":
 		print("Sesion finalizada.")
@@ -783,6 +849,7 @@ def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
 			else "Generar mi reporte",
 		),
 		("15", "Consultar clima de un proyecto"),
+		("16", "Consultar indicador economico"),
 	]
 	if usuario_actual.rol in ROLES_GESTION:
 		opciones.insert(0, ("1", "Gestionar departamentos"))
@@ -795,6 +862,7 @@ def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
 		if usuario_actual.rol == "admin":
 			opciones.append(("13", "Cambiar rol de usuario"))
 			opciones.append(("14", "Eliminar usuario"))
+		opciones.append(("17", "Calcular pago en moneda extranjera"))
 	print("\n=== ECOTECH SOLUTIONS ===")
 	for numero, descripcion in opciones:
 		print(f"{numero}. {descripcion}")

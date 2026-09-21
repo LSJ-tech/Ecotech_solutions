@@ -23,7 +23,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
-- Unidad 3: en desarrollo. Paso 1: configuración segura mediante `.env` y `requirements.txt`. Paso 2: consumo de la API de clima (OpenWeatherMap) con `requests`, validación de entradas, manejo de errores HTTP y de red, y ciudad asociada a cada proyecto. Pendiente: indicadores económicos, cálculo de pagos y caché local.
+- Unidad 3: en desarrollo. Paso 1: configuración segura mediante `.env` y `requirements.txt`. Paso 2: consumo de la API de clima (OpenWeatherMap) con `requests`, validación de entradas, manejo de errores HTTP y de red, y ciudad asociada a cada proyecto. Paso 3: indicadores económicos (mindicador.cl) y cálculo de pagos en moneda extranjera a partir de las horas registradas. Pendiente: caché local de datos externos y pruebas automatizadas.
 
 ## Requisitos
 
@@ -168,6 +168,8 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Permitir que solo un administrador cambie roles o elimine otras cuentas.
 - Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
 - Consultar el clima actual de la ciudad de un proyecto (opción 15, disponible para todos los roles).
+- Consultar el valor vigente del dólar, el euro o la UF (opción 16, todos los roles).
+- Calcular el pago de un empleado en moneda extranjera según sus horas registradas y una tarifa por hora en CLP (opción 17, solo `admin` y `rrhh`).
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
@@ -215,6 +217,10 @@ Los datos sensibles no se escriben en el código fuente. `main.py` carga el arch
 
 Cada proyecto puede tener una ciudad (`proyectos.ciudad`, agregada mediante migración automática en `inicializar_bd()`). La opción `Consultar clima de un proyecto` muestra temperatura, humedad y descripción para apoyar la planificación.
 
+`ServicioIndicadores` implementa la misma abstracción sobre mindicador.cl (API pública sin llave) y devuelve un `Indicador` con el último valor de la serie, su fecha y la moneda que representa. Solo se aceptan los códigos de la lista blanca `INDICADORES_PERMITIDOS` (`dolar`, `euro`, `uf`); cualquier otro texto se rechaza antes de salir a la red, porque la API responde 500 ante códigos desconocidos y eso se confundiría con una caída del servicio.
+
+El cálculo de pagos vive en el núcleo: `sumar_horas_empleado()` totaliza `registros_tiempo` y `calcular_pago()` (en `main.py`) convierte horas × tarifa en CLP y luego a la moneda del indicador, validando que horas, tarifa y tipo de cambio sean positivos. El resultado es un `Pago` inmutable con ambos montos y el valor de cambio usado, de modo que la conversión sea trazable.
+
 ## Validaciones realizadas
 
 - Compilación de `main.py` con `py -3 -m py_compile`.
@@ -238,6 +244,7 @@ Cada proyecto puede tener una ciudad (`proyectos.ciudad`, agregada mediante migr
 - Verificación de que los códigos de rol se leen desde `.env`, que un código faltante produce un mensaje claro sin exponer valores y que ningún secreto queda escrito en el código fuente.
 - Pruebas del servicio de clima con respuestas simuladas (`unittest.mock`): 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, cuerpo no JSON y JSON con campos faltantes o fuera de rango; ningún mensaje al usuario contiene la llave.
 - Verificación de la migración de `proyectos.ciudad` sobre una base antigua, del guardado y actualización de la ciudad, del rechazo de ciudades con números o símbolos y de la opción de menú 15.
+- Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; opción 17 restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.

@@ -153,6 +153,14 @@ def validar_ciudad_opcional(valor: str | None) -> str | None:
 	return validar_ciudad(str(valor))
 
 
+def validar_monto(valor: float, campo: str) -> float:
+	"""Valida un monto numérico estrictamente positivo (tarifas, tipos de cambio)."""
+
+	if isinstance(valor, bool) or not isinstance(valor, (int, float)) or valor <= 0:
+		raise ValueError(f"{campo} debe ser un número mayor que 0.")
+	return float(valor)
+
+
 def validar_horas(horas: float) -> float:
 	"""Valida el rango permitido para un registro de tiempo."""
 
@@ -654,6 +662,16 @@ def guardar_registro_tiempo(
 	return int(cursor.lastrowid)
 
 
+def sumar_horas_empleado(connection: sqlite3.Connection, rut: str) -> float:
+	"""Devuelve el total de horas registradas por un empleado."""
+
+	fila = connection.execute(
+		"SELECT COALESCE(SUM(horas), 0) FROM registros_tiempo WHERE rut_empleado = ?",
+		(validar_rut(rut),),
+	).fetchone()
+	return float(fila[0])
+
+
 def listar_registros_tiempo(
 	connection: sqlite3.Connection, rut_empleado: str | None = None
 ) -> list[sqlite3.Row]:
@@ -843,6 +861,41 @@ class RegistroTiempo:
 			raise ValueError("El registro debe estar asociado a un proyecto válido.")
 
 
+@dataclass(frozen=True)
+class Pago:
+	"""Resultado del cálculo de pago de un empleado en una moneda extranjera."""
+
+	rut: str
+	horas: float
+	tarifa_hora_clp: float
+	monto_clp: float
+	moneda: str
+	valor_cambio: float
+	monto_moneda: float
+
+
+def calcular_pago(
+	rut: str, horas: float, tarifa_hora_clp: float, moneda: str, valor_cambio: float
+) -> Pago:
+	"""Convierte horas trabajadas a pesos y luego a la moneda del país del proyecto."""
+
+	rut = validar_rut(rut)
+	horas = validar_monto(horas, "Las horas trabajadas")
+	tarifa_hora_clp = validar_monto(tarifa_hora_clp, "La tarifa por hora")
+	valor_cambio = validar_monto(valor_cambio, "El tipo de cambio")
+	moneda = validar_texto(moneda, "La moneda").upper()
+	monto_clp = round(horas * tarifa_hora_clp, 2)
+	return Pago(
+		rut=rut,
+		horas=horas,
+		tarifa_hora_clp=tarifa_hora_clp,
+		monto_clp=monto_clp,
+		moneda=moneda,
+		valor_cambio=valor_cambio,
+		monto_moneda=round(monto_clp / valor_cambio, 2),
+	)
+
+
 class IExportador(ABC):
 	"""Define el contrato común para generar informes."""
 
@@ -896,6 +949,7 @@ __all__ = [
 	"ExportadorExcel",
 	"ExportadorPDF",
 	"IExportador",
+	"Pago",
 	"Proyecto",
 	"RegistroTiempo",
 	"ServicioReportes",
@@ -904,6 +958,7 @@ __all__ = [
 	"asignar_empleado_a_proyecto",
 	"asignar_empleado_departamento_bd",
 	"asignar_empleado_proyecto_bd",
+	"calcular_pago",
 	"conectar_bd",
 	"generar_hash_contrasena",
 	"guardar_departamento",
@@ -919,8 +974,10 @@ __all__ = [
 	"listar_registros_tiempo",
 	"listar_usuarios",
 	"obtener_codigo_rol",
+	"sumar_horas_empleado",
 	"validar_ciudad_opcional",
 	"validar_horas",
+	"validar_monto",
 	"validar_rut",
 	"validar_texto",
 	"verificar_codigo_rol",

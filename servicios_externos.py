@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 import logging
 import os
@@ -19,6 +19,8 @@ TIMEOUT_SEGUNDOS = 8
 REINTENTOS_SERVIDOR = 1
 MENSAJE_RESPUESTA_INVALIDA = "La respuesta del servicio externo no tiene el formato esperado."
 PATRON_CIUDAD = re.compile(r"[A-Za-zÁÉÍÓÚÑáéíóúñü' -]{2,60}")
+# Indicadores de mindicador.cl permitidos y la moneda que representan.
+INDICADORES_PERMITIDOS = {"dolar": "USD", "euro": "EUR", "uf": "UF"}
 
 # El registro técnico va a un archivo local; nunca incluye llaves ni parámetros.
 LOGGER = logging.getLogger("ecotech.servicios")
@@ -36,6 +38,16 @@ def validar_ciudad(valor: str) -> str:
 		raise ValueError(
 			"La ciudad solo puede contener letras, espacios y guiones (2 a 60 caracteres)."
 		)
+	return valor
+
+
+def validar_indicador(valor: str) -> str:
+	"""Acepta solo indicadores de la lista blanca antes de consultar la API."""
+
+	valor = validar_texto(valor, "El indicador").lower()
+	if valor not in INDICADORES_PERMITIDOS:
+		opciones = ", ".join(sorted(INDICADORES_PERMITIDOS))
+		raise ValueError(f"El indicador debe ser uno de: {opciones}.")
 	return valor
 
 
@@ -179,11 +191,64 @@ class ServicioClima(IServicioExterno):
 		)
 
 
+@dataclass(frozen=True)
+class Indicador:
+	"""Valor vigente de un indicador económico expresado en pesos chilenos."""
+
+	codigo: str
+	nombre: str
+	moneda: str
+	valor: float
+	fecha: date
+	fecha_consulta: datetime
+
+
+class ServicioIndicadores(IServicioExterno):
+	"""Consulta indicadores económicos chilenos en mindicador.cl (sin llave)."""
+
+	URL_BASE = "https://mindicador.cl/api"
+
+	def __init__(self, cliente: ClienteHTTP | None = None) -> None:
+		self._cliente = cliente or ClienteHTTP(self.URL_BASE)
+
+	def consultar(self, criterio: str) -> Indicador:
+		codigo = validar_indicador(criterio)
+		datos = self._cliente.obtener_json(codigo, {})
+		return self._interpretar(codigo, datos)
+
+	@staticmethod
+	def _interpretar(codigo: str, datos: dict[str, Any]) -> Indicador:
+		"""Toma el valor más reciente de la serie y valida tipo, rango y fecha."""
+
+		try:
+			ultimo = datos["serie"][0]
+			valor = float(ultimo["valor"])
+			fecha = date.fromisoformat(str(ultimo["fecha"])[:10])
+			nombre = str(datos.get("nombre") or codigo).strip()
+		except (KeyError, IndexError, TypeError, ValueError) as error:
+			LOGGER.error("Indicador con formato inesperado: %s", codigo)
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
+		if valor <= 0 or fecha > date.today():
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
+		return Indicador(
+			codigo=codigo,
+			nombre=nombre,
+			moneda=INDICADORES_PERMITIDOS[codigo],
+			valor=valor,
+			fecha=fecha,
+			fecha_consulta=datetime.now(),
+		)
+
+
 __all__ = [
+	"INDICADORES_PERMITIDOS",
 	"Clima",
 	"ClienteHTTP",
 	"ErrorServicioExterno",
 	"IServicioExterno",
+	"Indicador",
 	"ServicioClima",
+	"ServicioIndicadores",
 	"validar_ciudad",
+	"validar_indicador",
 ]
