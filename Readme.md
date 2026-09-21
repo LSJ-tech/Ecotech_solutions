@@ -65,7 +65,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 
 El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
 
-Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; y el autoregistro de cuentas `empleado` todavía abierto. La ficha completa de `Empleado` y `CifradorDatos` ya están implementados.
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; La ficha completa de `Empleado`, `CifradorDatos` y el registro de cuentas restringido a RR.HH. ya están implementados.
 
 ## Estado de los criterios
 
@@ -158,7 +158,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-`test_nucleo.py` (19 pruebas) cubre el núcleo de la Unidad 2: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+`test_nucleo.py` (24 pruebas) cubre el núcleo de la Unidad 2 y el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto): migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
 
 `test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
@@ -192,8 +192,8 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Registrar horas trabajadas (los empleados solo las propias).
 - Consultar registros de tiempo.
 - Crear y listar usuarios asociados a empleados.
-- Solicitar login antes de entrar al menú principal.
-- Registrar usuarios con rol `admin`, `rrhh` o `empleado`.
+- Solicitar login antes de entrar al menú principal; usuario y contraseña vacíos se rechazan antes de consultar la base.
+- Registrar el administrador inicial desde la pantalla de acceso solo cuando la base no tiene cuentas; después, las cuentas `admin`, `rrhh` o `empleado` se crean únicamente desde el sistema por `admin` o `rrhh` (opción 13).
 - Generar automáticamente el nombre de usuario usando la inicial del nombre y el apellido.
 - Crear automáticamente la ficha del empleado para los roles `empleado` y `rrhh`, con dirección, teléfono, fecha de inicio de contrato y salario mensual; el sistema asigna un ID único automático.
 - Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
@@ -205,7 +205,7 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
-En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol `admin` o `rrhh` se solicita el código secreto definido en `.env`; si la variable no está configurada, el sistema lo informa sin revelar ningún valor. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
+En el primer inicio la pantalla de acceso ofrece `Registrar administrador inicial`: el primer usuario es siempre `admin` (se exige el código `ECOTECH_CODIGO_ADMIN`), porque de otro modo nadie podría crear el resto de las cuentas. Una vez que existe una cuenta, esa opción desaparece y el registro de empleados y de otros administradores es una función de RR.HH. dentro del sistema, como pide la guía de la Unidad 1. Al crear cuentas `admin` o `rrhh` se solicita el código secreto definido en `.env`; si la variable no está configurada, el sistema lo informa sin revelar ningún valor. Los usuarios nuevos se guardan con hash PBKDF2; las credenciales antiguas almacenadas en texto plano se rechazan y deben restablecerse de forma segura.
 
 Las contraseñas y códigos secretos se muestran como asteriscos mientras se escriben. Las contraseñas se almacenan mediante PBKDF2 y no en texto plano.
 
@@ -312,7 +312,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suites `test_nucleo.py` (19) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (24) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.

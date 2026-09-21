@@ -25,6 +25,7 @@
 21. Cambio 35: revisión contra la rúbrica y la guía de la Unidad 1; modelo UML unificado en `uml.mmd`.
 22. Cambio 36 (alineación con la Unidad 1, paso 1): ficha completa del empleado, ID automático y pago desde el salario.
 23. Cambio 37 (alineación con la Unidad 1, paso 2): cifrado en reposo de los datos personales del empleado.
+24. Cambio 38 (alineación con la Unidad 1, paso 3): registro de cuentas restringido a RR.HH. y validación del login.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1053,3 +1054,29 @@ Para el valor hora se compararon dos convenciones: dividir el sueldo por 180 hor
 - `py -3 -m py_compile main.py interfaz.py test_nucleo.py` finalizó correctamente.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 47 pruebas en verde. Las cinco nuevas verifican que la base solo contiene tokens (sin rastro de la dirección ni del salario), que cifrar y descifrar devuelve el original y que dos cifrados del mismo texto difieren, que una clave incorrecta produce el mensaje "no corresponde", que una clave vacía o no Fernet se informa, y que los valores en texto plano se cifran al iniciar y luego se leen correctamente.
 - Prueba sobre una copia de `ecotech_solutions.db` real: al actualizar la ficha de un empleado con dirección, teléfono y salario, las tres columnas quedan como tokens `gAAAAA…` y `Listar empleados` (detallado) muestra `Los Aromos 45 | +56 9 5555 1234 | Salario: $950,000`.
+
+## Cambio 38 - Alineación con la Unidad 1, paso 3: registro de cuentas restringido
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `interfaz.py`, `test_nucleo.py`
+**Objetivo:** cumplir el requisito "el sistema debe permitir a los administradores de recursos humanos registrar nuevos empleados" y el criterio 3.1.2.G.15 (restringir el acceso mediante controles de flujo y sesión), cerrando el autoregistro que permitía a cualquier persona crear una cuenta `empleado` desde la pantalla de acceso.
+
+### Hallazgo
+
+La opción `Registrar usuario` de la pantalla de acceso estaba disponible siempre y solo exigía código secreto para `admin` y `rrhh`. Cualquier persona con acceso al programa podía crearse una cuenta `empleado`, registrar horas y consultar las APIs, sin intervención de RR.HH.
+
+### Implementación
+
+- `mostrar_menu_acceso(con_usuarios)` muestra `Registrar administrador inicial` únicamente cuando la tabla `usuarios` está vacía. `procesar_opcion_acceso()` recibe ese estado: con cuentas existentes, la opción `2` responde que el registro lo realiza un administrador o RR.HH. desde el sistema y no crea nada.
+- `registrar_usuario_menu()` acepta `rol_forzado`; `registrar_primer_usuario()` lo usa con `"admin"`, de modo que el primer usuario es siempre administrador (con el código `ECOTECH_CODIGO_ADMIN`) y puede crear el resto de las cuentas. Sin esta regla, un primer usuario `empleado` dejaría el sistema sin nadie capaz de registrar cuentas.
+- `hay_usuarios()` reemplaza la consulta repetida en el bucle de acceso, que quedó más simple (sin el caso especial `opcion == "2"`).
+- `autenticar_usuario()` rechaza usuario o contraseña vacíos antes de consultar la base, como pide la guía ("validar las credenciales ingresadas evitando valores vacíos").
+
+### Revisión técnica
+
+Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código de invitación" adicional. Se descartó: seguiría siendo un secreto compartido más que administrar y no corresponde al requisito, que asigna el registro a RR.HH. La creación de cuentas ya existía en la opción 13 con verificación de rol, por lo que el cambio consistió en cerrar la puerta duplicada, no en construir una nueva.
+
+### Validación
+
+- `py -3 -m py_compile interfaz.py test_nucleo.py` finalizó correctamente.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 52 pruebas en verde. Las cinco nuevas verifican que sin cuentas el menú ofrece registrar el administrador inicial; que ese registro no pregunta el rol y guarda `admin`; que con cuentas la opción no aparece, la entrada `2` responde con el mensaje de RR.HH. y no crea usuarios; que usuario o contraseña vacíos se rechazan sin consultar la base; y que el login correcto devuelve el usuario con su rol.

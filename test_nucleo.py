@@ -304,5 +304,55 @@ class PruebasMenuEmpleado(unittest.TestCase):
 		self.assertIn("salario", str(contexto.exception))
 
 
+class PruebasAcceso(unittest.TestCase):
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		ui.leer_contrasena = lambda mensaje: "1234" if "Codigo" in mensaje else "clave"
+		os.environ["ECOTECH_CODIGO_ADMIN"] = "1234"
+
+	def tearDown(self):
+		self.connection.close()
+
+	def test_sin_usuarios_el_menu_ofrece_registrar_administrador(self):
+		salida = ejecutar_con_entradas(lambda: ui.mostrar_menu_acceso(False), ["0"])
+		self.assertIn("2. Registrar administrador inicial", salida)
+
+	def test_primer_usuario_se_crea_como_admin_sin_preguntar_rol(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.procesar_opcion_acceso(self.connection, "2", False),
+			["Ana", "Perez", "Soto"],  # no se pide rol: contraseña y código vienen simulados
+		)
+		self.assertIn("debe ser administrador", salida)
+		self.assertIn("Su usuario es: aperez", salida)
+		fila = self.connection.execute("SELECT rol FROM usuarios").fetchone()
+		self.assertEqual(fila["rol"], "admin")
+
+	def test_con_usuarios_no_hay_autoregistro(self):
+		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "clave", rol="admin"))
+		self.assertTrue(ui.hay_usuarios(self.connection))
+		salida = ejecutar_con_entradas(lambda: ui.mostrar_menu_acceso(True), ["0"])
+		self.assertNotIn("Registrar", salida)
+		salida = ejecutar_con_entradas(lambda: ui.procesar_opcion_acceso(self.connection, "2", True))
+		self.assertIn("lo realiza un administrador o RR.HH.", salida)
+		self.assertEqual(self.connection.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0], 1)
+
+	def test_login_rechaza_credenciales_vacias_sin_consultar(self):
+		ui.leer_contrasena = lambda mensaje: "   "
+		salida = ejecutar_con_entradas(lambda: ui.autenticar_usuario(self.connection), ["admin"])
+		self.assertIn("no pueden estar vacíos", salida)
+		ui.leer_contrasena = lambda mensaje: "clave"
+		salida = ejecutar_con_entradas(lambda: ui.autenticar_usuario(self.connection), [""])
+		self.assertIn("no pueden estar vacíos", salida)
+
+	def test_login_correcto_devuelve_usuario_con_rol(self):
+		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "clave", rol="admin"))
+		resultado = {}
+		ejecutar_con_entradas(
+			lambda: resultado.setdefault("u", ui.autenticar_usuario(self.connection)), ["admin"]
+		)
+		self.assertEqual(resultado["u"].rol, "admin")
+
+
 if __name__ == "__main__":
 	unittest.main()
