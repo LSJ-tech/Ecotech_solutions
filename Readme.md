@@ -20,7 +20,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 
 - Unidad 2: criterios 2.1.1 a 2.1.5 implementados y validados.
 - Arquitectura: núcleo de dominio y persistencia en `main.py`; servicios externos en `servicios_externos.py`; interfaz de consola en `interfaz.py`.
-- Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
+- Seguridad: PBKDF2 para contraseñas, cifrado Fernet en reposo para dirección, teléfono y salario, y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso, complejidad cognitiva y fechas con zona horaria; sin avisos de mantenibilidad SonarQube en los módulos ni en las pruebas.
 - Unidad 3: criterios 3.1.1 a 3.1.4 implementados y validados. Consumo de OpenWeatherMap (clima por proyecto) y mindicador.cl (dólar, euro, UF) con `requests`; secretos en `.env`; validación de entradas y de respuestas; manejo de errores HTTP y de red con mensajes sin datos sensibles; respaldo local en SQLite; cálculo de pagos en moneda extranjera; 28 pruebas automatizadas sin red en `test_servicios_externos.py`.
@@ -28,7 +28,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 ## Requisitos
 
 - Python 3.10 o superior.
-- Dependencias declaradas en `requirements.txt`: `requests` (consumo de APIs) y `python-dotenv` (carga de `.env`).
+- Dependencias declaradas en `requirements.txt`: `requests` (consumo de APIs), `python-dotenv` (carga de `.env`) y `cryptography` (cifrado de datos personales).
 - SQLite se utiliza mediante la librería estándar `sqlite3`.
 
 ## Estructura del proyecto
@@ -65,7 +65,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 
 El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
 
-Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `CifradorDatos`, `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; y el autoregistro de cuentas `empleado` todavía abierto. La ficha completa de `Empleado` (`id_empleado`, `direccion`, `telefono`, `fecha_inicio_contrato`, `salario`) ya está implementada.
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; y el autoregistro de cuentas `empleado` todavía abierto. La ficha completa de `Empleado` y `CifradorDatos` ya están implementados.
 
 ## Estado de los criterios
 
@@ -158,7 +158,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-`test_nucleo.py` (14 pruebas) cubre el núcleo de la Unidad 2: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+`test_nucleo.py` (19 pruebas) cubre el núcleo de la Unidad 2: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
 
 `test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
@@ -171,7 +171,13 @@ py -3 -m pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Luego editar `.env` y definir `ECOTECH_CODIGO_ADMIN` y `ECOTECH_CODIGO_RRHH` (códigos exigidos para registrar cuentas `admin` y `rrhh`). Para ejecutar:
+Luego editar `.env` y definir `ECOTECH_CODIGO_ADMIN` y `ECOTECH_CODIGO_RRHH` (códigos exigidos para registrar cuentas `admin` y `rrhh`), `OPENWEATHER_API_KEY` y `ECOTECH_CLAVE_CIFRADO`. La clave de cifrado se genera una sola vez con:
+
+```powershell
+py -3 -c "import main; print(main.generar_clave_cifrado())"
+```
+
+Para ejecutar:
 
 ```powershell
 py -3 interfaz.py
@@ -250,8 +256,13 @@ Los datos sensibles no se escriben en el código fuente. `main.py` carga el arch
 | `ECOTECH_CODIGO_RRHH` | Código exigido para registrar una cuenta `rrhh`. |
 | `ECOTECH_DB_PATH` | Ruta opcional de la base SQLite. |
 | `OPENWEATHER_API_KEY` | Llave de OpenWeatherMap para el servicio de clima. |
+| `ECOTECH_CLAVE_CIFRADO` | Clave Fernet con la que se cifran dirección, teléfono y salario en la base. Si se pierde, esos datos no se pueden recuperar. |
 
-Los datos personales del empleado (dirección, teléfono, fecha de contrato y salario) solo se muestran a `admin` y `rrhh`; el listado que ven los empleados omite esos campos. El cifrado en reposo de estos datos se incorpora en el siguiente paso.
+Los datos personales del empleado (dirección, teléfono, fecha de contrato y salario) solo se muestran a `admin` y `rrhh`; el listado que ven los empleados omite esos campos.
+
+### Cifrado de datos personales
+
+`CifradorDatos` (en `main.py`) envuelve `cryptography.fernet.Fernet` (AES-128-CBC con HMAC-SHA256, IV aleatorio por valor). Dirección, teléfono y salario se cifran antes de cada `INSERT`/`UPDATE` y se descifran al leer (`fila_a_empleado()`, `listar_empleados()`); en `ecotech_solutions.db` solo existen tokens `gAAAAA…`. RUT, nombre y correo se mantienen en claro porque se usan como identificadores y en búsquedas. Si la clave configurada no corresponde a la base, el sistema informa el problema sin exponer datos; si una base anterior contiene valores en texto plano, `inicializar_bd()` los cifra al arrancar.
 
 `.env` está en `.gitignore`; `.env.example` documenta las variables sin valores. Para la entrega comprimida se debe incluir un `.env` con los códigos acordados por el equipo.
 
@@ -301,7 +312,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suites `test_nucleo.py` (14) y `test_servicios_externos.py` (28) en verde; migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (19) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.

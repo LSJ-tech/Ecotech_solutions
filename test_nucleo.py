@@ -7,10 +7,16 @@ from datetime import date
 import builtins
 import contextlib
 import io
+import os
 import unittest
 
 import main
 import interfaz as ui
+
+# Las pruebas usan una clave de cifrado propia, independiente del .env del equipo.
+CLAVE_PRUEBAS = main.generar_clave_cifrado()
+os.environ[main.VARIABLE_CLAVE_CIFRADO] = CLAVE_PRUEBAS
+main.obtener_cifrador.cache_clear()
 
 
 ESQUEMA_ANTIGUO = """
@@ -166,8 +172,8 @@ class PruebasPersistenciaEmpleado(unittest.TestCase):
 			fecha_inicio_contrato=date(2024, 1, 1), salario=1_500_000,
 		)
 		self.assertTrue(actualizado)
-		fila = self.connection.execute("SELECT cargo, salario, telefono FROM empleados").fetchone()
-		self.assertEqual(tuple(fila), ("Lead", 1_500_000.0, "987654321"))
+		leido = main.fila_a_empleado(self.connection.execute("SELECT * FROM empleados").fetchone())
+		self.assertEqual((leido.cargo, leido.salario, leido.telefono), ("Lead", 1_500_000.0, "987654321"))
 		with self.assertRaises(ValueError):
 			main.actualizar_empleado(
 				self.connection, RUT, nombre="Ana", apellido="Perez", correo="ana@x.cl",
@@ -177,8 +183,63 @@ class PruebasPersistenciaEmpleado(unittest.TestCase):
 	def test_usuario_con_empleado_guarda_la_ficha_completa(self):
 		usuario = main.Usuario(0, "aperez", "clave", rol="empleado")
 		main.guardar_usuario_con_empleado(self.connection, usuario, empleado_completo())
+		leido = main.fila_a_empleado(self.connection.execute("SELECT * FROM empleados").fetchone())
+		self.assertEqual((leido.direccion, leido.salario), ("Av. Siempre Viva 123", 1_200_000.0))
+
+
+class PruebasCifradoDatosPersonales(unittest.TestCase):
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+
+	def tearDown(self):
+		self.connection.close()
+		os.environ[main.VARIABLE_CLAVE_CIFRADO] = CLAVE_PRUEBAS
+		main.obtener_cifrador.cache_clear()
+
+	def test_la_base_solo_contiene_tokens(self):
+		main.guardar_empleado(self.connection, empleado_completo())
+		fila = self.connection.execute("SELECT direccion, telefono, salario FROM empleados").fetchone()
+		for valor in fila:
+			self.assertTrue(str(valor).startswith(main.PREFIJO_TOKEN_FERNET), valor)
+		self.assertNotIn("Siempre Viva", str(tuple(fila)))
+		self.assertNotIn("1200000", str(tuple(fila)))
+
+	def test_cifrar_y_descifrar_devuelve_el_original(self):
+		cifrador = main.CifradorDatos(CLAVE_PRUEBAS)
+		token = cifrador.cifrar("Av. Uno 1")
+		self.assertNotEqual(token, "Av. Uno 1")
+		self.assertEqual(cifrador.descifrar(token), "Av. Uno 1")
+		self.assertNotEqual(cifrador.cifrar("Av. Uno 1"), token, "cada cifrado usa un IV distinto")
+
+	def test_clave_incorrecta_produce_mensaje_claro(self):
+		main.guardar_empleado(self.connection, empleado_completo())
+		os.environ[main.VARIABLE_CLAVE_CIFRADO] = main.generar_clave_cifrado()
+		main.obtener_cifrador.cache_clear()
+		with self.assertRaises(ValueError) as contexto:
+			main.listar_empleados(self.connection)
+		self.assertIn("no corresponde", str(contexto.exception))
+
+	def test_clave_ausente_o_invalida_se_informa(self):
+		with self.assertRaises(ValueError) as contexto:
+			main.CifradorDatos("   ")
+		self.assertIn(main.VARIABLE_CLAVE_CIFRADO, str(contexto.exception))
+		with self.assertRaises(ValueError):
+			main.CifradorDatos("clave-que-no-es-fernet")
+
+	def test_valores_heredados_en_texto_plano_se_cifran_al_iniciar(self):
+		self.connection.execute(
+			"INSERT INTO empleados (rut, nombre, apellido, correo, cargo, direccion, telefono, salario) "
+			"VALUES (?, 'Ana', 'Perez', 'ana@x.cl', 'Dev', 'Calle 5', '912345678', 900000)",
+			(RUT,),
+		)
+		self.connection.commit()
+		self.assertEqual(main.cifrar_datos_personales_pendientes(self.connection), 1)
+		self.assertEqual(main.cifrar_datos_personales_pendientes(self.connection), 0)
 		fila = self.connection.execute("SELECT direccion, salario FROM empleados").fetchone()
-		self.assertEqual(tuple(fila), ("Av. Siempre Viva 123", 1_200_000.0))
+		self.assertTrue(str(fila["direccion"]).startswith(main.PREFIJO_TOKEN_FERNET))
+		leido = main.fila_a_empleado(self.connection.execute("SELECT * FROM empleados").fetchone())
+		self.assertEqual((leido.direccion, leido.telefono, leido.salario), ("Calle 5", "912345678", 900000.0))
 
 
 class PruebasMenuEmpleado(unittest.TestCase):
@@ -201,8 +262,8 @@ class PruebasMenuEmpleado(unittest.TestCase):
 		self.assertIn("El teléfono solo puede contener", salida)
 		self.assertIn("El salario debe ser un número mayor que 0.", salida)
 		self.assertIn("Su usuario es: aperez", salida)
-		fila = self.connection.execute("SELECT telefono, salario FROM empleados").fetchone()
-		self.assertEqual(tuple(fila), ("+56 9 1234 5678", 1_200_000.0))
+		leido = main.fila_a_empleado(self.connection.execute("SELECT * FROM empleados").fetchone())
+		self.assertEqual((leido.telefono, leido.salario), ("+56 9 1234 5678", 1_200_000.0))
 
 	def test_listado_oculta_datos_personales_a_empleados(self):
 		main.guardar_empleado(self.connection, empleado_completo())

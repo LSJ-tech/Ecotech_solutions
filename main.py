@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date
-from functools import wraps
+from functools import lru_cache, wraps
 from pathlib import Path
 from typing import Any, Callable
 import hashlib
@@ -15,6 +15,7 @@ import re
 import secrets
 import sqlite3
 
+from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
 
 
@@ -36,6 +37,9 @@ JORNADA_SEMANAL_HORAS = 44
 DIAS_MES = 30
 DIAS_SEMANA = 7
 PATRON_TELEFONO = re.compile(r"\+?[\d ]{8,15}")
+VARIABLE_CLAVE_CIFRADO = "ECOTECH_CLAVE_CIFRADO"
+# Todo token Fernet comienza con este prefijo (versión 0x80 en base64 url-safe).
+PREFIJO_TOKEN_FERNET = "gAAAAA"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS departamentos (
@@ -53,7 +57,7 @@ CREATE TABLE IF NOT EXISTS empleados (
 	 direccion TEXT,
 	 telefono TEXT,
 	 fecha_inicio_contrato TEXT,
-	 salario REAL,
+	 salario TEXT,
 	 id_departamento INTEGER,
 	 FOREIGN KEY (id_departamento) REFERENCES departamentos(id_departamento)
 );
@@ -183,6 +187,124 @@ def validar_ciudad_opcional(valor: str | None) -> str | None:
 	return validar_ciudad(str(valor))
 
 
+class CifradorDatos:
+	"""Cifra y descifra datos personales en reposo con Fernet (AES-128-CBC + HMAC-SHA256)."""
+
+	def __init__(self, clave: str | None = None) -> None:
+		clave = (clave or os.environ.get(VARIABLE_CLAVE_CIFRADO, "")).strip()
+		if not clave:
+			raise ValueError(
+				f"No está configurada la clave de cifrado. Defina {VARIABLE_CLAVE_CIFRADO} "
+				"en .env (puede generarla con generar_clave_cifrado())."
+			)
+		try:
+			self._fernet = Fernet(clave.encode(CODIFICACION))
+		except (ValueError, TypeError) as error:
+			raise ValueError("La clave de cifrado configurada no es válida.") from error
+
+	def cifrar(self, texto: str) -> str:
+		"""Devuelve el token cifrado de un texto."""
+
+		return self._fernet.encrypt(texto.encode(CODIFICACION)).decode(CODIFICACION)
+
+	def descifrar(self, token: str) -> str:
+		"""Recupera el texto original; falla si la clave no corresponde a la base."""
+
+		try:
+			return self._fernet.decrypt(token.encode(CODIFICACION)).decode(CODIFICACION)
+		except InvalidToken as error:
+			raise ValueError(
+				"No fue posible descifrar los datos personales: la clave configurada "
+				"no corresponde a la base de datos."
+			) from error
+
+
+def generar_clave_cifrado() -> str:
+	"""Genera una clave Fernet nueva para copiar en .env."""
+
+	return Fernet.generate_key().decode(CODIFICACION)
+
+
+@lru_cache(maxsize=1)
+def obtener_cifrador() -> CifradorDatos:
+	"""Devuelve el cifrador configurado en el entorno (se construye una sola vez)."""
+
+	return CifradorDatos()
+
+
+@dataclass(frozen=True)
+class DatosPersonalesCifrados:
+	"""Tokens listos para persistir; None cuando el dato no fue informado."""
+
+	direccion: str | None
+	telefono: str | None
+	salario: str | None
+
+
+def cifrar_datos_personales(empleado: Empleado) -> DatosPersonalesCifrados:
+	"""Cifra dirección, teléfono y salario antes de guardarlos."""
+
+	cifrador = obtener_cifrador()
+	return DatosPersonalesCifrados(
+		direccion=cifrador.cifrar(empleado.direccion) if empleado.direccion else None,
+		telefono=cifrador.cifrar(empleado.telefono) if empleado.telefono else None,
+		salario=cifrador.cifrar(repr(empleado.salario)) if empleado.salario is not None else None,
+	)
+
+
+def descifrar_valor(token: str | None) -> str | None:
+	"""Descifra un valor almacenado; acepta None y valores heredados sin cifrar."""
+
+	if token is None:
+		return None
+	token = str(token)
+	if not token.startswith(PREFIJO_TOKEN_FERNET):
+		return token
+	return obtener_cifrador().descifrar(token)
+
+
+def descifrar_fila_empleado(fila: sqlite3.Row) -> dict[str, Any]:
+	"""Convierte una fila de empleados en un diccionario con los datos personales legibles."""
+
+	datos = dict(fila)
+	datos["direccion"] = descifrar_valor(fila["direccion"]) or ""
+	datos["telefono"] = descifrar_valor(fila["telefono"]) or ""
+	salario = descifrar_valor(fila["salario"])
+	datos["salario"] = float(salario) if salario is not None else None
+	return datos
+
+
+def cifrar_datos_personales_pendientes(connection: sqlite3.Connection) -> int:
+	"""Cifra valores guardados en texto plano por versiones anteriores; devuelve cuántos."""
+
+	pendientes = connection.execute(
+		"""
+		SELECT id_empleado, direccion, telefono, salario FROM empleados
+		WHERE (direccion IS NOT NULL AND direccion NOT LIKE ?)
+		   OR (telefono IS NOT NULL AND telefono NOT LIKE ?)
+		   OR (salario IS NOT NULL AND CAST(salario AS TEXT) NOT LIKE ?)
+		""",
+		(PREFIJO_TOKEN_FERNET + "%",) * 3,
+	).fetchall()
+	if not pendientes:
+		return 0
+	cifrador = obtener_cifrador()
+
+	def token(valor: Any) -> str | None:
+		if valor is None:
+			return None
+		valor = str(valor)
+		return valor if valor.startswith(PREFIJO_TOKEN_FERNET) else cifrador.cifrar(valor)
+
+	for fila in pendientes:
+		connection.execute(
+			"UPDATE empleados SET direccion = ?, telefono = ?, salario = ? WHERE id_empleado = ?",
+			(token(fila["direccion"]), token(fila["telefono"]), token(fila["salario"]), fila["id_empleado"]),
+		)
+	connection.commit()
+	return len(pendientes)
+
+
 def validar_telefono(valor: str) -> str:
 	"""Acepta teléfonos con dígitos, espacios y prefijo + (8 a 15 caracteres)."""
 
@@ -202,19 +324,20 @@ def calcular_tarifa_hora(salario_mensual: float) -> float:
 def fila_a_empleado(fila: sqlite3.Row) -> Empleado:
 	"""Construye un Empleado desde una fila de la tabla empleados."""
 
+	datos = descifrar_fila_empleado(fila)
 	return Empleado(
-		fila["rut"],
-		fila["nombre"],
-		fila["apellido"],
-		fila["correo"],
-		fila["cargo"],
-		direccion=fila["direccion"] or "",
-		telefono=fila["telefono"] or "",
-		fecha_inicio_contrato=date.fromisoformat(fila["fecha_inicio_contrato"])
-		if fila["fecha_inicio_contrato"]
+		datos["rut"],
+		datos["nombre"],
+		datos["apellido"],
+		datos["correo"],
+		datos["cargo"],
+		direccion=datos["direccion"],
+		telefono=datos["telefono"],
+		fecha_inicio_contrato=date.fromisoformat(datos["fecha_inicio_contrato"])
+		if datos["fecha_inicio_contrato"]
 		else None,
-		salario=fila["salario"],
-		id_empleado=int(fila["id_empleado"]),
+		salario=datos["salario"],
+		id_empleado=int(datos["id_empleado"]),
 	)
 
 
@@ -283,6 +406,7 @@ def inicializar_bd(connection: sqlite3.Connection) -> None:
 	}
 	if "id_empleado" not in columnas_empleados:
 		migrar_tabla_empleados(connection)
+	cifrar_datos_personales_pendientes(connection)
 
 
 def migrar_tabla_empleados(connection: sqlite3.Connection) -> None:
@@ -305,7 +429,7 @@ def migrar_tabla_empleados(connection: sqlite3.Connection) -> None:
 			 direccion TEXT,
 			 telefono TEXT,
 			 fecha_inicio_contrato TEXT,
-			 salario REAL,
+			 salario TEXT,
 			 id_departamento INTEGER,
 			 FOREIGN KEY (id_departamento) REFERENCES departamentos(id_departamento)
 			);
@@ -373,6 +497,7 @@ def guardar_empleado(
 ) -> None:
 	"""Inserta un empleado usando parámetros para evitar SQL injection."""
 
+	cifrado = cifrar_datos_personales(empleado)
 	cursor = connection.execute(
 		"""
 		INSERT INTO empleados
@@ -386,12 +511,12 @@ def guardar_empleado(
 			empleado.apellido,
 			empleado.correo,
 			empleado.cargo,
-			empleado.direccion,
-			empleado.telefono,
+			cifrado.direccion,
+			cifrado.telefono,
 			empleado.fecha_inicio_contrato.isoformat()
 			if empleado.fecha_inicio_contrato
 			else None,
-			empleado.salario,
+			cifrado.salario,
 			id_departamento,
 		),
 	)
@@ -421,11 +546,12 @@ def asignar_empleado_departamento_bd(
 	connection.commit()
 
 
-def listar_empleados(connection: sqlite3.Connection) -> list[sqlite3.Row]:
-	"""Devuelve los empleados almacenados junto con su departamento."""
+def listar_empleados(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+	"""Devuelve los empleados con su departamento y los datos personales descifrados."""
 
-	return list(
-		connection.execute(
+	return [
+		descifrar_fila_empleado(fila)
+		for fila in connection.execute(
 			"""
 			SELECT e.id_empleado, e.rut, e.nombre, e.apellido, e.correo, e.cargo,
 			       e.direccion, e.telefono, e.fecha_inicio_contrato, e.salario,
@@ -436,7 +562,7 @@ def listar_empleados(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 			ORDER BY e.apellido, e.nombre
 			"""
 		)
-	)
+	]
 
 
 @revertir_si_falla
@@ -468,6 +594,7 @@ def actualizar_empleado(
 		fecha_inicio_contrato=fecha_inicio_contrato,
 		salario=salario,
 	)
+	cifrado = cifrar_datos_personales(empleado)
 	cursor = connection.execute(
 		"""
 		UPDATE empleados
@@ -480,12 +607,12 @@ def actualizar_empleado(
 			empleado.apellido,
 			empleado.correo,
 			empleado.cargo,
-			empleado.direccion,
-			empleado.telefono,
+			cifrado.direccion,
+			cifrado.telefono,
 			empleado.fecha_inicio_contrato.isoformat()
 			if empleado.fecha_inicio_contrato
 			else None,
-			empleado.salario,
+			cifrado.salario,
 			id_departamento,
 			empleado.rut,
 		),
@@ -661,6 +788,7 @@ def guardar_usuario_con_empleado(
 ) -> int:
 	"""Inserta un empleado y su usuario asociado en una sola transacción."""
 
+	cifrado = cifrar_datos_personales(empleado)
 	cursor_empleado = connection.execute(
 		"""
 		INSERT INTO empleados
@@ -674,12 +802,12 @@ def guardar_usuario_con_empleado(
 			empleado.apellido,
 			empleado.correo,
 			empleado.cargo,
-			empleado.direccion,
-			empleado.telefono,
+			cifrado.direccion,
+			cifrado.telefono,
 			empleado.fecha_inicio_contrato.isoformat()
 			if empleado.fecha_inicio_contrato
 			else None,
-			empleado.salario,
+			cifrado.salario,
 			id_departamento,
 		),
 	)
@@ -1108,6 +1236,7 @@ __all__ = [
 	"DATABASE_PATH",
 	"ROLES_VALIDOS",
 	"VARIABLES_CODIGO_ROL",
+	"CifradorDatos",
 	"Departamento",
 	"Empleado",
 	"ExportadorExcel",
@@ -1124,8 +1253,11 @@ __all__ = [
 	"asignar_empleado_proyecto_bd",
 	"calcular_pago",
 	"calcular_tarifa_hora",
+	"cifrar_datos_personales_pendientes",
 	"conectar_bd",
 	"fila_a_empleado",
+	"generar_clave_cifrado",
+	"obtener_cifrador",
 	"generar_hash_contrasena",
 	"guardar_departamento",
 	"guardar_empleado",

@@ -364,18 +364,19 @@ def calcular_pago_menu(connection: sqlite3.Connection, usuario_actual: Usuario) 
 	fila = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()
 	if fila is None:
 		raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
-	if fila["salario"] is None:
+	empleado = fila_a_empleado(fila)
+	if empleado.salario is None:
 		raise ValueError("El empleado no tiene salario registrado para calcular un pago.")
 	horas = sumar_horas_empleado(connection, rut)
 	if horas <= 0:
 		raise ValueError("El empleado no tiene horas registradas para calcular un pago.")
-	tarifa = calcular_tarifa_hora(fila["salario"])
+	tarifa = calcular_tarifa_hora(empleado.salario)
 	resultado = obtener_indicador(connection)
 	avisar_respaldo(resultado)
 	indicador = resultado.dato
 	pago = calcular_pago(rut, horas, tarifa, indicador.moneda, indicador.valor)
 	print(
-		f"Horas registradas: {pago.horas:g} | Salario: ${fila['salario']:,.0f} CLP "
+		f"Horas registradas: {pago.horas:g} | Salario: ${empleado.salario:,.0f} CLP "
 		f"| Valor hora: ${pago.tarifa_hora_clp:,.2f} CLP\n"
 		f"Total: ${pago.monto_clp:,.2f} CLP = {pago.monto_moneda:,.2f} {pago.moneda} "
 		f"({indicador.nombre} a ${pago.valor_cambio:,.2f} del {indicador.fecha:%Y-%m-%d})"

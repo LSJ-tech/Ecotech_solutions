@@ -24,6 +24,7 @@
 20. Cambio 34: reglas S5778, S5906 y S8572 de SonarQube y protección de la llave en el registro técnico.
 21. Cambio 35: revisión contra la rúbrica y la guía de la Unidad 1; modelo UML unificado en `uml.mmd`.
 22. Cambio 36 (alineación con la Unidad 1, paso 1): ficha completa del empleado, ID automático y pago desde el salario.
+23. Cambio 37 (alineación con la Unidad 1, paso 2): cifrado en reposo de los datos personales del empleado.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1025,3 +1026,30 @@ Para el valor hora se compararon dos convenciones: dividir el sueldo por 180 hor
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 42 pruebas en verde.
 - `test_nucleo.py`: la migración sobre un esquema antiguo con un empleado, un usuario, una asignación y un registro de horas agrega las columnas, asigna `id_empleado = 1`, conserva las cuatro filas dependientes, deja `PRAGMA foreign_key_check` vacío y reactiva las claves foráneas; ejecutarla dos veces no duplica filas. Teléfonos `abc` y `12`, salarios `0` y `-1` y una fecha en texto son rechazados. Guardar asigna el ID y `fila_a_empleado()` devuelve un objeto igual al original. El registro por menú repite solo el teléfono y el salario inválidos y persiste la ficha. El listado básico omite salario y dirección; el detallado los incluye. Con salario de $1.200.000 y 10 horas, el pago muestra `Valor hora: $6,363.64` y `63.64 USD`; sin salario, se rechaza.
 - Migración ejecutada sobre una copia de `ecotech_solutions.db` real: 2 empleados, 4 usuarios y 1 departamento conservados, `foreign_key_check` vacío, columnas nuevas presentes. Los empleados existentes quedan con salario sin registrar hasta que se edite su ficha (opción que llega con el CRUD del menú).
+
+## Cambio 37 - Alineación con la Unidad 1, paso 2: cifrado de datos personales
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `test_nucleo.py`, `requirements.txt`, `.env.example`
+**Objetivo:** cumplir el requisito "Seguridad de datos sensibles" de la guía de la Unidad 1 ("almacena datos personales de empleados de forma segura utilizando técnicas de cifrado adecuadas") y reforzar el criterio 3.1.2 sobre protección de información sensible.
+
+### Implementación
+
+- `CifradorDatos` encapsula `cryptography.fernet.Fernet` (AES-128-CBC con HMAC-SHA256 y IV aleatorio, cifrado autenticado). La clave se lee de `ECOTECH_CLAVE_CIFRADO`; si falta o no es válida, el constructor lanza `ValueError` con instrucciones, sin valores. `generar_clave_cifrado()` produce una clave nueva para copiar en `.env`. `obtener_cifrador()` construye el cifrador una sola vez (`lru_cache`).
+- `cifrar_datos_personales()` devuelve los tokens de dirección, teléfono y salario (o `None` si el dato no fue informado); se usa en `guardar_empleado()`, `guardar_usuario_con_empleado()` y `actualizar_empleado()`. `descifrar_fila_empleado()` hace la operación inversa y alimenta a `fila_a_empleado()` y a `listar_empleados()`, que ahora devuelve diccionarios con los datos legibles.
+- Un token Fernet siempre comienza con `gAAAAA`; `descifrar_valor()` usa ese prefijo para aceptar valores heredados en texto plano, y `cifrar_datos_personales_pendientes()` (llamada desde `inicializar_bd()`) los cifra al arrancar, informando cuántos. La columna `salario` pasa a `TEXT` en el esquema y en la migración, porque almacena tokens.
+- Si la clave configurada no corresponde a la base, `descifrar()` traduce `InvalidToken` a un `ValueError` con mensaje claro, que la interfaz muestra sin interrumpir el programa.
+- `.env.example` documenta la variable y advierte que perder la clave impide recuperar los datos; `requirements.txt` agrega `cryptography`.
+
+### Revisión técnica
+
+- Qué cifrar: se pidió a la IA una propuesta y sugirió cifrar también nombre y correo. Se descartó: el RUT, el nombre y el correo funcionan como identificadores (clave única, búsqueda por RUT, generación del nombre de usuario), y cifrarlos con IV aleatorio impediría las restricciones `UNIQUE` y las búsquedas. Se cifran los datos que la guía llama personales y que no participan en consultas: dirección, teléfono y salario.
+- Algoritmo: se evaluó `hashlib`/`hmac` (ya usados para contraseñas). Se descartó porque un hash no es reversible y estos datos deben leerse; se necesita cifrado simétrico autenticado. Fernet, de la librería `cryptography`, aporta autenticación (detecta manipulación) y evita elegir modos y IV a mano.
+- Gestión de la clave: la IA propuso derivarla de la contraseña del administrador. Se descartó porque cambiar la contraseña dejaría ilegible la base y porque el sistema tiene varios administradores. La clave vive en `.env`, fuera del repositorio, igual que la llave de la API.
+- Compatibilidad: en lugar de exigir una base vacía, se conservó la lectura de valores heredados y se agregó la migración automática, para que la base del equipo siga funcionando.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py test_nucleo.py` finalizó correctamente.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 47 pruebas en verde. Las cinco nuevas verifican que la base solo contiene tokens (sin rastro de la dirección ni del salario), que cifrar y descifrar devuelve el original y que dos cifrados del mismo texto difieren, que una clave incorrecta produce el mensaje "no corresponde", que una clave vacía o no Fernet se informa, y que los valores en texto plano se cifran al iniciar y luego se leen correctamente.
+- Prueba sobre una copia de `ecotech_solutions.db` real: al actualizar la ficha de un empleado con dirección, teléfono y salario, las tres columnas quedan como tokens `gAAAAA…` y `Listar empleados` (detallado) muestra `Los Aromos 45 | +56 9 5555 1234 | Salario: $950,000`.
