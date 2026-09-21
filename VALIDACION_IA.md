@@ -23,6 +23,7 @@
 19. Cambio 33: avisos de mantenibilidad SonarQube tras la Unidad 3.
 20. Cambio 34: reglas S5778, S5906 y S8572 de SonarQube y protección de la llave en el registro técnico.
 21. Cambio 35: revisión contra la rúbrica y la guía de la Unidad 1; modelo UML unificado en `uml.mmd`.
+22. Cambio 36 (alineación con la Unidad 1, paso 1): ficha completa del empleado, ID automático y pago desde el salario.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -993,3 +994,34 @@ Se descartó ajustar el diagrama al código actual (eliminar del modelo los atri
 
 - El archivo `uml.mmd` se renderiza en mermaid.live sin errores de sintaxis.
 - Cada clase, atributo y método del diagrama corresponde a código existente o a un requisito de la guía de la Unidad 1 identificado en esta revisión.
+
+## Cambio 36 - Alineación con la Unidad 1, paso 1: ficha completa del empleado
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`
+**Archivo creado:** `test_nucleo.py`
+**Objetivo:** cumplir el requisito "Registro de empleados" de la guía de la Unidad 1 (nombre, dirección, teléfono, correo, fecha de inicio de contrato, salario e ID único automático) y usar el salario en el cálculo de pagos de la Unidad 3, en lugar de pedir una tarifa por teclado.
+
+### Implementación
+
+- Esquema: `empleados` pasa a tener `id_empleado INTEGER PRIMARY KEY AUTOINCREMENT`, `rut` como `UNIQUE` (sigue siendo la referencia de las claves foráneas existentes) y las columnas `direccion`, `telefono`, `fecha_inicio_contrato` y `salario`.
+- Migración: SQLite no permite agregar una clave primaria con `ALTER TABLE`, por lo que `migrar_tabla_empleados()` crea la tabla nueva, copia las filas en el orden original, elimina la antigua y renombra. Las claves foráneas se desactivan solo durante la copia; con ellas activas, `DROP TABLE empleados` habría disparado `ON DELETE CASCADE` en `registros_tiempo` y `empleado_proyecto` y `ON DELETE SET NULL` en `usuarios`. Al terminar se ejecuta `PRAGMA foreign_key_check` y se reactivan las claves foráneas en un bloque `finally`.
+- Modelo: `Empleado` incorpora `direccion`, `telefono`, `fecha_inicio_contrato`, `salario` e `id_empleado` como campos opcionales con valor por defecto, de modo que las fichas antiguas siguen siendo válidas y las llamadas posicionales existentes no cambian. Si los datos vienen, se validan: `validar_telefono()` (dígitos, espacios y prefijo `+`, 8 a 15 caracteres), `validar_monto()` para el salario y tipo `date` para la fecha.
+- Persistencia: `guardar_empleado()` y `guardar_usuario_con_empleado()` insertan los nuevos campos y asignan `id_empleado` desde `lastrowid`; `listar_empleados()` los devuelve; `actualizar_empleado()` construye un `Empleado` para reutilizar todas las validaciones del modelo antes del `UPDATE`; `fila_a_empleado()` centraliza la conversión fila → objeto y reemplaza los `Empleado(*fila)` posicionales de la interfaz.
+- Valor hora: `calcular_tarifa_hora()` aplica la fórmula de la Dirección del Trabajo (sueldo mensual / 30 × 7 / jornada semanal de 44 horas), con las constantes documentadas en el código.
+- Interfaz: el registro de `empleado` y `rrhh` solicita dirección, teléfono, fecha de inicio de contrato y salario, repitiendo solo el campo inválido; `Listar empleados` muestra el ID y, solo para `admin` y `rrhh`, la ficha personal; `Calcular pago` deja de pedir la tarifa y usa el salario del empleado, rechazando con un mensaje claro a quien no lo tenga registrado.
+
+### Revisión técnica
+
+Se evaluó con apoyo de IA mantener `rut` como clave primaria y agregar el ID como columna `UNIQUE` adicional para evitar la reconstrucción de la tabla. Se descartó porque el requisito pide un ID asignado automáticamente por el sistema, lo que en SQLite exige `INTEGER PRIMARY KEY AUTOINCREMENT`; la reconstrucción con claves foráneas desactivadas es el procedimiento documentado por SQLite para este caso y quedó cubierta por pruebas.
+
+La IA propuso mostrar la ficha completa en todos los listados. Se descartó por el requisito de privacidad de datos personales de la guía: un empleado no debe ver la dirección, el teléfono ni el salario de sus compañeros. La ficha se muestra únicamente a los roles de gestión.
+
+Para el valor hora se compararon dos convenciones: dividir el sueldo por 180 horas (práctica habitual con jornada de 45 horas) o aplicar la fórmula de la Dirección del Trabajo con la jornada vigente de 44 horas. Se adoptó la segunda por estar referida a la normativa actual; las constantes permiten ajustarla si la jornada cambia.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py test_nucleo.py` finalizó correctamente.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 42 pruebas en verde.
+- `test_nucleo.py`: la migración sobre un esquema antiguo con un empleado, un usuario, una asignación y un registro de horas agrega las columnas, asigna `id_empleado = 1`, conserva las cuatro filas dependientes, deja `PRAGMA foreign_key_check` vacío y reactiva las claves foráneas; ejecutarla dos veces no duplica filas. Teléfonos `abc` y `12`, salarios `0` y `-1` y una fecha en texto son rechazados. Guardar asigna el ID y `fila_a_empleado()` devuelve un objeto igual al original. El registro por menú repite solo el teléfono y el salario inválidos y persiste la ficha. El listado básico omite salario y dirección; el detallado los incluye. Con salario de $1.200.000 y 10 horas, el pago muestra `Valor hora: $6,363.64` y `63.64 USD`; sin salario, se rechaza.
+- Migración ejecutada sobre una copia de `ecotech_solutions.db` real: 2 empleados, 4 usuarios y 1 departamento conservados, `foreign_key_check` vacío, columnas nuevas presentes. Los empleados existentes quedan con salario sin registrar hasta que se edite su ficha (opción que llega con el CRUD del menú).

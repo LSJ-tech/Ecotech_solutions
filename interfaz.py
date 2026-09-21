@@ -23,7 +23,9 @@ from main import (
 	asignar_empleado_proyecto_bd,
 	asignar_empleado_departamento_bd,
 	calcular_pago,
+	calcular_tarifa_hora,
 	conectar_bd,
+	fila_a_empleado,
 	guardar_departamento,
 	guardar_proyecto,
 	guardar_registro_tiempo,
@@ -40,6 +42,7 @@ from main import (
 	validar_horas,
 	validar_monto,
 	validar_rut,
+	validar_telefono,
 	validar_texto,
 	verificar_codigo_rol,
 	verificar_contrasena,
@@ -61,10 +64,7 @@ MENSAJE_OPCION_INVALIDA = "Opcion no valida."
 MENSAJE_SELECCION = "Seleccione una opcion: "
 MENSAJE_ID_PROYECTO = "ID del proyecto: "
 ROLES_GESTION = {"admin", "rrhh"}
-CONSULTA_EMPLEADO = (
-	"SELECT rut, nombre, apellido, correo, cargo "
-	"FROM empleados WHERE rut = ?"
-)
+CONSULTA_EMPLEADO = "SELECT * FROM empleados WHERE rut = ?"
 
 
 def leer_entero(mensaje: str, permitir_vacio: bool = False) -> int | None:
@@ -176,6 +176,16 @@ def normalizar_rol(valor: str) -> str:
 	"""Normaliza el nombre del rol RR.HH. para guardarlo como rrhh."""
 
 	return valor.strip().lower().replace(".", "").replace(":", "")
+
+
+def leer_telefono() -> str:
+	"""Solicita un teléfono y repite solo ese campo si el formato es inválido."""
+
+	while True:
+		try:
+			return validar_telefono(input("Telefono (ejemplo: +56 9 1234 5678): "))
+		except ValueError as error:
+			print(error)
 
 
 def leer_rol() -> str:
@@ -349,18 +359,24 @@ def calcular_pago_menu(connection: sqlite3.Connection, usuario_actual: Usuario) 
 	"""Calcula el pago de un empleado en moneda extranjera según sus horas registradas."""
 
 	verificar_gestion(usuario_actual, "calcular pagos")
-	mostrar_empleados(connection)
+	mostrar_empleados(connection, detallado=True)
 	rut = leer_rut()
+	fila = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()
+	if fila is None:
+		raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
+	if fila["salario"] is None:
+		raise ValueError("El empleado no tiene salario registrado para calcular un pago.")
 	horas = sumar_horas_empleado(connection, rut)
 	if horas <= 0:
 		raise ValueError("El empleado no tiene horas registradas para calcular un pago.")
-	tarifa = leer_monto("Tarifa por hora en CLP: ", "La tarifa por hora")
+	tarifa = calcular_tarifa_hora(fila["salario"])
 	resultado = obtener_indicador(connection)
 	avisar_respaldo(resultado)
 	indicador = resultado.dato
 	pago = calcular_pago(rut, horas, tarifa, indicador.moneda, indicador.valor)
 	print(
-		f"Horas registradas: {pago.horas:g} | Tarifa: ${pago.tarifa_hora_clp:,.2f} CLP\n"
+		f"Horas registradas: {pago.horas:g} | Salario: ${fila['salario']:,.0f} CLP "
+		f"| Valor hora: ${pago.tarifa_hora_clp:,.2f} CLP\n"
 		f"Total: ${pago.monto_clp:,.2f} CLP = {pago.monto_moneda:,.2f} {pago.moneda} "
 		f"({indicador.nombre} a ${pago.valor_cambio:,.2f} del {indicador.fecha:%Y-%m-%d})"
 	)
@@ -393,6 +409,10 @@ def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 			f"{primer_apellido} {segundo_apellido}",
 			leer_correo(),
 			leer_texto("Cargo: ", "El cargo"),
+			direccion=leer_texto("Direccion: ", "La dirección"),
+			telefono=leer_telefono(),
+			fecha_inicio_contrato=leer_fecha("Fecha de inicio de contrato (YYYY-MM-DD): "),
+			salario=leer_monto("Salario mensual en CLP: ", "El salario"),
 		)
 
 	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado, rol=rol)
@@ -428,7 +448,7 @@ def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
 		fila["nombre_usuario"],
 		"********",
 		bool(fila["activo"]),
-		empleado=Empleado(*empleado_row) if empleado_row else None,
+		empleado=fila_a_empleado(empleado_row) if empleado_row else None,
 		rol=fila["rol"] or "empleado",
 	)
 	return usuario
@@ -502,19 +522,30 @@ def mostrar_departamentos(connection: sqlite3.Connection) -> None:
 		print(f"{departamento['id_departamento']}: {departamento['nombre']}")
 
 
-def mostrar_empleados(connection: sqlite3.Connection) -> None:
-	"""Muestra los empleados almacenados."""
+def mostrar_empleados(connection: sqlite3.Connection, detallado: bool = False) -> None:
+	"""Muestra los empleados; los datos personales solo se incluyen si detallado es True."""
 
 	empleados = listar_empleados(connection)
 	if not empleados:
 		print("No hay empleados registrados.")
 		return
 	for empleado in empleados:
-		print(
-			f"{empleado['rut']}: {empleado['nombre']} {empleado['apellido']} | "
-			f"{empleado['cargo']} | {empleado['correo']} | "
-			f"Departamento: {empleado['departamento'] or 'Sin asignar'}"
+		linea = (
+			f"{empleado['id_empleado']}. {empleado['rut']}: "
+			f"{empleado['nombre']} {empleado['apellido']} | {empleado['cargo']} | "
+			f"{empleado['correo']} | Departamento: {empleado['departamento'] or 'Sin asignar'}"
 		)
+		if detallado:
+			salario = (
+				f"${empleado['salario']:,.0f}" if empleado["salario"] is not None else "Sin registrar"
+			)
+			linea += (
+				f"\n    Direccion: {empleado['direccion'] or 'Sin registrar'} | "
+				f"Telefono: {empleado['telefono'] or 'Sin registrar'} | "
+				f"Contrato desde: {empleado['fecha_inicio_contrato'] or 'Sin registrar'} | "
+				f"Salario: {salario}"
+			)
+		print(linea)
 
 
 def mostrar_proyectos(connection: sqlite3.Connection) -> None:
@@ -717,7 +748,7 @@ def registrar_tiempo_menu(
 	).fetchone()
 	if not empleado_row or not proyecto_row:
 		raise ValueError("El empleado o proyecto indicado no existe.")
-	empleado = Empleado(*empleado_row)
+	empleado = fila_a_empleado(empleado_row)
 	proyecto = Proyecto(
 		proyecto_row["id_proyecto"],
 		proyecto_row["nombre"],
@@ -834,7 +865,7 @@ def construir_opciones_menu(
 		("1", "Gestionar departamentos", gestion,
 			lambda: gestionar_departamentos_menu(connection, usuario_actual)),
 		("2", "Listar departamentos", True, lambda: mostrar_departamentos(connection)),
-		("3", "Listar empleados", True, lambda: mostrar_empleados(connection)),
+		("3", "Listar empleados", True, lambda: mostrar_empleados(connection, detallado=gestion)),
 		("4", "Crear proyecto", gestion, lambda: crear_proyecto_menu(connection, usuario_actual)),
 		("5", "Listar proyectos", True, lambda: mostrar_proyectos(connection)),
 		("6", "Asignar empleado a proyecto", gestion,

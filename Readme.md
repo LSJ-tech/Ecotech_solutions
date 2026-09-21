@@ -38,6 +38,7 @@ Ecotech_solutions/
 ├── main.py
 ├── servicios_externos.py
 ├── interfaz.py
+├── test_nucleo.py
 ├── test_servicios_externos.py
 ├── requirements.txt
 ├── .env.example
@@ -64,7 +65,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 
 El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
 
-Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Empleado` sin `id_empleado`, `direccion`, `telefono`, `fecha_inicio_contrato` ni `salario`; `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `CifradorDatos`, `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; y el autoregistro de cuentas `empleado` todavía abierto.
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `CifradorDatos`, `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; y el autoregistro de cuentas `empleado` todavía abierto. La ficha completa de `Empleado` (`id_empleado`, `direccion`, `telefono`, `fecha_inicio_contrato`, `salario`) ya está implementada.
 
 ## Estado de los criterios
 
@@ -75,7 +76,7 @@ Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos a�
 El archivo `main.py` contiene las siguientes clases:
 
 - `Departamento`: identifica un departamento y mantiene sus empleados.
-- `Empleado`: representa a un trabajador, su departamento, proyectos y registros de tiempo.
+- `Empleado`: representa a un trabajador con su ficha personal (dirección, teléfono, fecha de inicio de contrato y salario), un ID único automático, su departamento, proyectos y registros de tiempo.
 - `Proyecto`: representa un proyecto, sus empleados asignados y sus registros de tiempo.
 - `Usuario`: representa las credenciales y el estado de acceso de un empleado.
 - `RegistroTiempo`: relaciona una fecha y una cantidad de horas con un empleado y un proyecto.
@@ -154,10 +155,12 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 ## Pruebas automatizadas
 
 ```powershell
-py -3 -m unittest -v test_servicios_externos
+py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-Las 28 pruebas se ejecutan sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
+`test_nucleo.py` (14 pruebas) cubre el núcleo de la Unidad 2: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+
+`test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
 ## Ejecución
 
@@ -186,13 +189,13 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Solicitar login antes de entrar al menú principal.
 - Registrar usuarios con rol `admin`, `rrhh` o `empleado`.
 - Generar automáticamente el nombre de usuario usando la inicial del nombre y el apellido.
-- Crear automáticamente la ficha del empleado para los roles `empleado` y `rrhh`.
+- Crear automáticamente la ficha del empleado para los roles `empleado` y `rrhh`, con dirección, teléfono, fecha de inicio de contrato y salario mensual; el sistema asigna un ID único automático.
 - Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
 - Permitir que solo un administrador cambie roles o elimine otras cuentas.
 - Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
 - Consultar el clima actual de la ciudad de un proyecto (opción 10, disponible para todos los roles).
 - Consultar el valor vigente del dólar, el euro o la UF (opción 11, todos los roles).
-- Calcular el pago de un empleado en moneda extranjera según sus horas registradas y una tarifa por hora en CLP (opción 12, solo `admin` y `rrhh`).
+- Calcular el pago de un empleado en moneda extranjera a partir de sus horas registradas y de su salario mensual (opción 12, solo `admin` y `rrhh`).
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
@@ -208,7 +211,7 @@ Menú completo (los roles ven solo lo permitido):
 |---|---|---|
 | 1 | Gestionar departamentos | admin, rrhh |
 | 2 | Listar departamentos | todos |
-| 3 | Listar empleados | todos |
+| 3 | Listar empleados (admin y rrhh ven además la ficha personal) | todos |
 | 4 | Crear proyecto | admin, rrhh |
 | 5 | Listar proyectos | todos |
 | 6 | Asignar empleado a proyecto | admin, rrhh |
@@ -248,6 +251,8 @@ Los datos sensibles no se escriben en el código fuente. `main.py` carga el arch
 | `ECOTECH_DB_PATH` | Ruta opcional de la base SQLite. |
 | `OPENWEATHER_API_KEY` | Llave de OpenWeatherMap para el servicio de clima. |
 
+Los datos personales del empleado (dirección, teléfono, fecha de contrato y salario) solo se muestran a `admin` y `rrhh`; el listado que ven los empleados omite esos campos. El cifrado en reposo de estos datos se incorpora en el siguiente paso.
+
 `.env` está en `.gitignore`; `.env.example` documenta las variables sin valores. Para la entrega comprimida se debe incluir un `.env` con los códigos acordados por el equipo.
 
 ## Consumo de servicios externos (Unidad 3)
@@ -264,7 +269,7 @@ Cada proyecto puede tener una ciudad (`proyectos.ciudad`, agregada mediante migr
 
 `ServicioIndicadores` implementa la misma abstracción sobre mindicador.cl (API pública sin llave) y devuelve un `Indicador` con el último valor de la serie, su fecha y la moneda que representa. Solo se aceptan los códigos de la lista blanca `INDICADORES_PERMITIDOS` (`dolar`, `euro`, `uf`); cualquier otro texto se rechaza antes de salir a la red, porque la API responde 500 ante códigos desconocidos y eso se confundiría con una caída del servicio.
 
-El cálculo de pagos vive en el núcleo: `sumar_horas_empleado()` totaliza `registros_tiempo` y `calcular_pago()` (en `main.py`) convierte horas × tarifa en CLP y luego a la moneda del indicador, validando que horas, tarifa y tipo de cambio sean positivos. El resultado es un `Pago` inmutable con ambos montos y el valor de cambio usado, de modo que la conversión sea trazable.
+El cálculo de pagos vive en el núcleo: `sumar_horas_empleado()` totaliza `registros_tiempo`, `calcular_tarifa_hora()` convierte el salario mensual del empleado en valor hora con la fórmula de la Dirección del Trabajo (sueldo / 30 × 7 / 44 horas semanales) y `calcular_pago()` (en `main.py`) convierte horas × valor hora en CLP y luego a la moneda del indicador, validando que horas, tarifa y tipo de cambio sean positivos. Un empleado sin salario registrado no puede tener pago calculado. El resultado es un `Pago` inmutable con ambos montos y el valor de cambio usado, de modo que la conversión sea trazable.
 
 ### Persistencia local y continuidad
 
@@ -296,7 +301,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suite `test_servicios_externos.py` (28 pruebas, `unittest`, sin red) en verde; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (14) y `test_servicios_externos.py` (28) en verde; migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.

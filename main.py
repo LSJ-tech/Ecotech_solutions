@@ -31,6 +31,11 @@ VARIABLES_CODIGO_ROL = {
 ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 CODIFICACION = "utf-8"
+# Valor hora según la fórmula de la Dirección del Trabajo: sueldo mensual / 30 x 7 / jornada semanal.
+JORNADA_SEMANAL_HORAS = 44
+DIAS_MES = 30
+DIAS_SEMANA = 7
+PATRON_TELEFONO = re.compile(r"\+?[\d ]{8,15}")
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS departamentos (
@@ -39,11 +44,16 @@ CREATE TABLE IF NOT EXISTS departamentos (
 );
 
 CREATE TABLE IF NOT EXISTS empleados (
-	 rut TEXT PRIMARY KEY,
+	 id_empleado INTEGER PRIMARY KEY AUTOINCREMENT,
+	 rut TEXT NOT NULL UNIQUE,
 	 nombre TEXT NOT NULL,
 	 apellido TEXT NOT NULL,
 	 correo TEXT NOT NULL UNIQUE,
 	 cargo TEXT NOT NULL,
+	 direccion TEXT,
+	 telefono TEXT,
+	 fecha_inicio_contrato TEXT,
+	 salario REAL,
 	 id_departamento INTEGER,
 	 FOREIGN KEY (id_departamento) REFERENCES departamentos(id_departamento)
 );
@@ -173,6 +183,41 @@ def validar_ciudad_opcional(valor: str | None) -> str | None:
 	return validar_ciudad(str(valor))
 
 
+def validar_telefono(valor: str) -> str:
+	"""Acepta teléfonos con dígitos, espacios y prefijo + (8 a 15 caracteres)."""
+
+	valor = validar_texto(valor, "El teléfono")
+	if PATRON_TELEFONO.fullmatch(valor) is None:
+		raise ValueError("El teléfono solo puede contener dígitos, espacios y un prefijo +.")
+	return valor
+
+
+def calcular_tarifa_hora(salario_mensual: float) -> float:
+	"""Convierte un sueldo mensual en valor hora con la fórmula de la Dirección del Trabajo."""
+
+	salario_mensual = validar_monto(salario_mensual, "El salario")
+	return round(salario_mensual / DIAS_MES * DIAS_SEMANA / JORNADA_SEMANAL_HORAS, 2)
+
+
+def fila_a_empleado(fila: sqlite3.Row) -> Empleado:
+	"""Construye un Empleado desde una fila de la tabla empleados."""
+
+	return Empleado(
+		fila["rut"],
+		fila["nombre"],
+		fila["apellido"],
+		fila["correo"],
+		fila["cargo"],
+		direccion=fila["direccion"] or "",
+		telefono=fila["telefono"] or "",
+		fecha_inicio_contrato=date.fromisoformat(fila["fecha_inicio_contrato"])
+		if fila["fecha_inicio_contrato"]
+		else None,
+		salario=fila["salario"],
+		id_empleado=int(fila["id_empleado"]),
+	)
+
+
 def validar_monto(valor: float, campo: str) -> float:
 	"""Valida un monto numérico estrictamente positivo (tarifas, tipos de cambio)."""
 
@@ -233,6 +278,50 @@ def inicializar_bd(connection: sqlite3.Connection) -> None:
 	if "ciudad" not in columnas_proyectos:
 		connection.execute("ALTER TABLE proyectos ADD COLUMN ciudad TEXT")
 	connection.commit()
+	columnas_empleados = {
+		fila["name"] for fila in connection.execute("PRAGMA table_info(empleados)")
+	}
+	if "id_empleado" not in columnas_empleados:
+		migrar_tabla_empleados(connection)
+
+
+def migrar_tabla_empleados(connection: sqlite3.Connection) -> None:
+	"""Reconstruye empleados con ID automático y datos personales, conservando filas y FK."""
+
+	# Las claves foráneas se desactivan solo durante la copia: con ellas activas,
+	# DROP TABLE dispararía ON DELETE CASCADE / SET NULL en usuarios y registros.
+	connection.commit()
+	connection.execute("PRAGMA foreign_keys = OFF")
+	try:
+		connection.executescript(
+			"""
+			CREATE TABLE empleados_nueva (
+			 id_empleado INTEGER PRIMARY KEY AUTOINCREMENT,
+			 rut TEXT NOT NULL UNIQUE,
+			 nombre TEXT NOT NULL,
+			 apellido TEXT NOT NULL,
+			 correo TEXT NOT NULL UNIQUE,
+			 cargo TEXT NOT NULL,
+			 direccion TEXT,
+			 telefono TEXT,
+			 fecha_inicio_contrato TEXT,
+			 salario REAL,
+			 id_departamento INTEGER,
+			 FOREIGN KEY (id_departamento) REFERENCES departamentos(id_departamento)
+			);
+			INSERT INTO empleados_nueva
+			(rut, nombre, apellido, correo, cargo, id_departamento)
+			SELECT rut, nombre, apellido, correo, cargo, id_departamento
+			FROM empleados ORDER BY rowid;
+			DROP TABLE empleados;
+			ALTER TABLE empleados_nueva RENAME TO empleados;
+			"""
+		)
+		problemas = connection.execute("PRAGMA foreign_key_check").fetchall()
+		if problemas:
+			raise sqlite3.IntegrityError("La migración de empleados dejó claves foráneas inválidas.")
+	finally:
+		connection.execute("PRAGMA foreign_keys = ON")
 
 
 def generar_hash_contrasena(contrasena: str) -> str:
@@ -284,11 +373,12 @@ def guardar_empleado(
 ) -> None:
 	"""Inserta un empleado usando parámetros para evitar SQL injection."""
 
-	connection.execute(
+	cursor = connection.execute(
 		"""
 		INSERT INTO empleados
-		(rut, nombre, apellido, correo, cargo, id_departamento)
-		VALUES (?, ?, ?, ?, ?, ?)
+		(rut, nombre, apellido, correo, cargo, direccion, telefono,
+		 fecha_inicio_contrato, salario, id_departamento)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		""",
 		(
 			empleado.rut,
@@ -296,10 +386,17 @@ def guardar_empleado(
 			empleado.apellido,
 			empleado.correo,
 			empleado.cargo,
+			empleado.direccion,
+			empleado.telefono,
+			empleado.fecha_inicio_contrato.isoformat()
+			if empleado.fecha_inicio_contrato
+			else None,
+			empleado.salario,
 			id_departamento,
 		),
 	)
 	connection.commit()
+	empleado.id_empleado = int(cursor.lastrowid)
 
 
 @revertir_si_falla
@@ -330,7 +427,8 @@ def listar_empleados(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	return list(
 		connection.execute(
 			"""
-			SELECT e.rut, e.nombre, e.apellido, e.correo, e.cargo,
+			SELECT e.id_empleado, e.rut, e.nombre, e.apellido, e.correo, e.cargo,
+			       e.direccion, e.telefono, e.fecha_inicio_contrato, e.salario,
 			       d.nombre AS departamento
 			FROM empleados AS e
 			LEFT JOIN departamentos AS d
@@ -350,25 +448,47 @@ def actualizar_empleado(
 	apellido: str,
 	correo: str,
 	cargo: str,
+	direccion: str = "",
+	telefono: str = "",
+	fecha_inicio_contrato: date | None = None,
+	salario: float | None = None,
 	id_departamento: int | None = None,
 ) -> bool:
 	"""Actualiza los datos de un empleado y devuelve si existía."""
 
-	rut = validar_rut(rut)
-	nombre = validar_texto(nombre, "El nombre")
-	apellido = validar_texto(apellido, "El apellido")
-	correo = validar_texto(correo, "El correo")
-	cargo = validar_texto(cargo, "El cargo")
-	if "@" not in correo:
-		raise ValueError("El correo debe tener un formato válido.")
+	# Reutiliza las validaciones del modelo para que ninguna actualización las eluda.
+	empleado = Empleado(
+		rut,
+		nombre,
+		apellido,
+		correo,
+		cargo,
+		direccion=direccion,
+		telefono=telefono,
+		fecha_inicio_contrato=fecha_inicio_contrato,
+		salario=salario,
+	)
 	cursor = connection.execute(
 		"""
 		UPDATE empleados
-		SET nombre = ?, apellido = ?, correo = ?, cargo = ?,
-		    id_departamento = ?
+		SET nombre = ?, apellido = ?, correo = ?, cargo = ?, direccion = ?,
+		    telefono = ?, fecha_inicio_contrato = ?, salario = ?, id_departamento = ?
 		WHERE rut = ?
 		""",
-		(nombre, apellido, correo, cargo, id_departamento, rut),
+		(
+			empleado.nombre,
+			empleado.apellido,
+			empleado.correo,
+			empleado.cargo,
+			empleado.direccion,
+			empleado.telefono,
+			empleado.fecha_inicio_contrato.isoformat()
+			if empleado.fecha_inicio_contrato
+			else None,
+			empleado.salario,
+			id_departamento,
+			empleado.rut,
+		),
 	)
 	connection.commit()
 	return cursor.rowcount == 1
@@ -541,11 +661,12 @@ def guardar_usuario_con_empleado(
 ) -> int:
 	"""Inserta un empleado y su usuario asociado en una sola transacción."""
 
-	connection.execute(
+	cursor_empleado = connection.execute(
 		"""
 		INSERT INTO empleados
-		(rut, nombre, apellido, correo, cargo, id_departamento)
-		VALUES (?, ?, ?, ?, ?, ?)
+		(rut, nombre, apellido, correo, cargo, direccion, telefono,
+		 fecha_inicio_contrato, salario, id_departamento)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		""",
 		(
 			empleado.rut,
@@ -553,9 +674,16 @@ def guardar_usuario_con_empleado(
 			empleado.apellido,
 			empleado.correo,
 			empleado.cargo,
+			empleado.direccion,
+			empleado.telefono,
+			empleado.fecha_inicio_contrato.isoformat()
+			if empleado.fecha_inicio_contrato
+			else None,
+			empleado.salario,
 			id_departamento,
 		),
 	)
+	empleado.id_empleado = int(cursor_empleado.lastrowid)
 	usuario.empleado = empleado
 	cursor = connection.execute(
 		"""
@@ -770,6 +898,11 @@ class Empleado:
 	apellido: str
 	correo: str
 	cargo: str
+	direccion: str = ""
+	telefono: str = ""
+	fecha_inicio_contrato: date | None = None
+	salario: float | None = None
+	id_empleado: int = 0
 	departamento: Departamento | None = None
 	proyectos: list[Proyecto] = field(default_factory=list)
 	registros_tiempo: list[RegistroTiempo] = field(default_factory=list)
@@ -782,6 +915,17 @@ class Empleado:
 		self.cargo = validar_texto(self.cargo, "El cargo")
 		if "@" not in self.correo:
 			raise ValueError("El correo debe tener un formato válido.")
+		# Los datos personales son opcionales para fichas antiguas, pero si vienen se validan.
+		self.direccion = self.direccion.strip() if self.direccion else ""
+		self.telefono = validar_telefono(self.telefono) if self.telefono else ""
+		if self.fecha_inicio_contrato is not None and not isinstance(
+			self.fecha_inicio_contrato, date
+		):
+			raise ValueError("La fecha de inicio de contrato debe ser una fecha válida.")
+		if self.salario is not None:
+			self.salario = validar_monto(self.salario, "El salario")
+		if self.id_empleado < 0:
+			raise ValueError("El identificador del empleado no puede ser negativo.")
 
 
 @dataclass
@@ -979,7 +1123,9 @@ __all__ = [
 	"asignar_empleado_departamento_bd",
 	"asignar_empleado_proyecto_bd",
 	"calcular_pago",
+	"calcular_tarifa_hora",
 	"conectar_bd",
+	"fila_a_empleado",
 	"generar_hash_contrasena",
 	"guardar_departamento",
 	"guardar_empleado",
@@ -999,6 +1145,7 @@ __all__ = [
 	"validar_horas",
 	"validar_monto",
 	"validar_rut",
+	"validar_telefono",
 	"validar_texto",
 	"verificar_codigo_rol",
 	"verificar_contrasena",
