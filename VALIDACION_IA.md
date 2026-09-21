@@ -31,6 +31,39 @@
 27. Cambio 41 (alineación con la Unidad 1, paso 6): informes de las cuatro entidades exportados a archivo.
 28. Cambio 42 (alineación con la Unidad 1, paso 7): política de contraseñas y restauración de `__all__`.
 29. Cambio 43 (alineación con la Unidad 1, paso 8): búsqueda de departamentos y empleados.
+30. Cambio 44: inventario de fragmentos apoyados por IA (sección al inicio de este archivo).
+
+## Inventario de fragmentos apoyados por IA
+
+Esta tabla responde al indicador 2.1.5 ("identificar con transparencia qué fragmentos del código fueron apoyados o generados preliminarmente mediante herramientas de IA"). La herramienta usada en todo el proyecto fue un asistente de programación con IA (Claude, Anthropic) operado desde el editor. El método fue siempre el mismo: el equipo describe el requisito, la IA propone un borrador, el equipo lo ejecuta, lo prueba y decide adoptarlo, modificarlo o descartarlo; la decisión y su justificación quedan en el cambio indicado. Ningún fragmento se incorporó sin ejecutarse y sin pruebas.
+
+Leyenda: **Adoptado** = el borrador se integró con ajustes menores de estilo; **Modificado** = se cambió la lógica por un criterio técnico; **Descartado** = la propuesta se rechazó y se implementó otra solución; **Propio** = escrito por el equipo, con la IA solo como revisor.
+
+| Módulo / fragmento | Cambio | Decisión | Criterio aplicado |
+|---|---|---|---|
+| `main.py`: dataclasses `Departamento`, `Empleado`, `Proyecto`, `RegistroTiempo` y operaciones de dominio | 1 | Modificado | La IA propuso la estructura; atributos, relaciones bidireccionales y control de duplicados en listas se definieron a mano contra `uml.png` (coherencia con el modelo). |
+| `main.py`: `IExportador`, `ExportadorPDF`, `ExportadorExcel`, `ServicioReportes` | 3 | Modificado | La IA propuso varias alternativas de abstracción; se conservó solo la compatible con las responsabilidades del modelo (abstracción, herencia y polimorfismo sin duplicar la generación). |
+| `main.py`: `Usuario` con `_contrasena`, propiedad y `verificar_contrasena()` | 3, 7, 9 | Modificado | El borrador exponía la contraseña en la propiedad; se ocultó tras `obtener_contrasena_interna()` y se pasó a hash PBKDF2 con sal (seguridad). |
+| `main.py`: `SCHEMA_SQL`, `conectar_bd()`, `inicializar_bd()`, `revertir_si_falla` | 4, 5, Anexo E | Modificado | La IA propuso el esquema inicial; claves primarias, foráneas y la tabla intermedia se revisaron a mano contra el UML; consultas parametrizadas y rollback ante error SQLite (integridad, estabilidad). |
+| `main.py`: `actualizar_*` y `eliminar_*` | 4, 7 | Modificado | Hallazgo de la revisión crítica: las actualizaciones eludían las validaciones del modelo; se reutilizaron los validadores (seguridad de datos). |
+| `interfaz.py`: menú de consola, lectores `leer_*` y flujo de acceso | 8, 10, 12, 24, 31 | Modificado | Borradores de IA reescritos para separar interfaz de núcleo, eliminar duplicidad y definir el menú en una sola tabla (mantenibilidad; avisos SonarQube). |
+| `interfaz.py`: `leer_contrasena()` (`getpass`, luego asteriscos con `msvcrt` en Windows) | 15 y ajustes posteriores | Adoptado | Propuesta de IA verificada en Windows (`msvcrt`) y con `getpass` en otros sistemas; evita mostrar credenciales en pantalla. |
+| `main.py`: `obtener_codigo_rol()` / `verificar_codigo_rol()` con `.env` y `hmac.compare_digest` | 27 | Descartado (parcial) | La IA propuso valores por defecto cuando falta la variable; se rechazó para no dejar secretos en el código; la comparación en tiempo constante sí se adoptó. |
+| `servicios_externos.py`: `ClienteHTTP` | 28, 32 | Modificado | Del borrador se descartaron `except Exception` genérico, `str(error)` al usuario (fuga de URL con llave) y ausencia de `timeout`; se agregaron reintento, límite de 1 MB y HTTPS obligatorio. |
+| `servicios_externos.py`: `ServicioClima`, `ServicioIndicadores` | 28, 29 | Modificado | El borrador usaba `serie[-1]` (dato más antiguo); la exploración real mostró orden descendente y se corrigió a `serie[0]`; lista blanca de indicadores por el 500 de códigos desconocidos. |
+| `main.py`: `Pago` y `calcular_pago()` | 29, 36 | Modificado | La IA propuso tarifa por hora en la tabla; se reemplazó por el salario mensual y la fórmula de la Dirección del Trabajo (44 h) (coherencia con el requisito). |
+| `servicios_externos.py`: `consultar_con_respaldo()` y tablas `consultas_clima`/`indicadores` | 30 | Descartado (parcial) | La IA propuso caché con expiración; se descartó y se dejó respaldo solo ante fallo, con aviso al usuario (continuidad sin ocultar el estado del servicio). |
+| `test_servicios_externos.py`, `test_nucleo.py` | 32, 36-43 | Modificado | Esqueletos de prueba generados por IA y ejecutados uno a uno; varios aserts eran incorrectos (por ejemplo, esperaban ver el texto de un `input()` simulado) y se corrigieron en las pruebas, no en el código. |
+| `main.py`: `CifradorDatos`, `cifrar_datos_personales()`, migración de valores heredados | 37 | Modificado | La IA proponía cifrar también nombre y correo y derivar la clave de la contraseña del admin; ambas se descartaron (identificadores y búsquedas; rotación de clave). Fernet adoptado. |
+| `main.py`: `migrar_tabla_empleados()` | 36 | Descartado | La IA sugería mantener `rut` como clave primaria y añadir el ID como `UNIQUE`; se reconstruyó la tabla con `id_empleado AUTOINCREMENT` según el requisito. |
+| `interfaz.py`: acceso restringido (`registrar_primer_usuario`, `hay_usuarios`) | 38 | Descartado | La IA propuso un "código de invitación" para autoregistro; se cerró el autoregistro y se dejó el registro en RR.HH. |
+| `main.py`: `rut_gerente` como clave foránea con `ON DELETE SET NULL` | 39 | Descartado | La IA propuso `gerente: str` libre como en el UML de la Unidad 1; se modeló como empleado existente. |
+| `main.py`: escapado CSV de la descripción | 39, 41 | Modificado | La IA concatenaba sin comillas; se aplicó el escapado estándar y luego el módulo `csv`. |
+| `main.py` / `interfaz.py`: `desasignar_empleado_proyecto_bd()`, `eliminar_empleado()` con cuenta, `leer_o_conservar()`, `ejecutar_submenu()` | 40 | Modificado | Se descartó borrar las horas al desasignar y dejar la cuenta huérfana; la validación de fecha de fin se movió al lector tras detectar que perdía el formulario. |
+| `main.py`: `Informe`, `construir_informe_*`, `ServicioReportes.guardar()` | 41 | Modificado | Se excluyeron dirección, teléfono y salario del informe (cifrado en reposo) y se sanitizó el nombre del archivo con fecha y hora. |
+| `main.py`: `validar_contrasena()` | 42 | Modificado | La IA proponía mayúscula, minúscula y símbolo obligatorios; se fijó largo mínimo 8 con letras y dígitos, validado al persistir. |
+| `main.py`: `patron_busqueda()` y filtros `LIKE ... ESCAPE` | 43 | Descartado | La IA concatenaba el texto en el `WHERE`; se usó parámetro con comodines escapados (inyección SQL). |
+| Documentación: `Readme.md`, `VALIDACION_IA.md`, `uml.mmd` | 2, 35 | Propio (con apoyo) | Redactados por el equipo con la IA como redactor de borradores; cada afirmación se contrastó con el código y las pruebas antes de publicarse. |
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1210,3 +1243,21 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
+
+## Cambio 44 - Inventario de fragmentos apoyados por IA
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `VALIDACION_IA.md`, `Readme.md`
+**Objetivo:** cumplir el indicador 2.1.5 de la defensa ("identificar con transparencia qué fragmentos del código fueron apoyados o generados preliminarmente mediante herramientas de IA") con una vista única, ya que hasta ahora esa información estaba repartida en los 43 cambios.
+
+### Implementación
+
+Se agregó la sección "Inventario de fragmentos apoyados por IA" al inicio de este archivo: una tabla por fragmento (módulo y funciones o clases), el cambio donde se documenta, la decisión (adoptado, modificado, descartado, propio) y el criterio técnico aplicado (seguridad, coherencia con el modelo, estabilidad, mantenibilidad). El Readme enlaza la sección desde el criterio 2.1.5.
+
+### Revisión técnica
+
+La tabla se construyó leyendo las secciones "Revisión técnica" de cada cambio, no de memoria; cada fila cita el cambio que la respalda para que el evaluador pueda verificarla. Se prefirió clasificar por fragmento y no por archivo completo, porque en los tres módulos conviven código adoptado y código reescrito.
+
+### Validación
+
+- Cada fila referencia un cambio existente y funciones presentes en el código actual (`grep` de los nombres citados en `main.py`, `interfaz.py` y `servicios_externos.py`).

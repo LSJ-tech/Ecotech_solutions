@@ -142,7 +142,7 @@ La revisión detectó que algunas operaciones de actualización SQLite podían s
 
 Además, se reforzó la seguridad del modelo de usuario: la propiedad `contrasena` ya no expone el valor real en texto plano, y el acceso interno se controla mediante `obtener_contrasena_interna()` y `verificar_contrasena()`. Esto evita fugas de credenciales por lectura directa del objeto y mantiene el flujo de autenticación y persistencia bajo validación explícita.
 
-La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los hallazgos, las decisiones técnicas y la validación de cada mejora.
+La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los hallazgos, las decisiones técnicas y la validación de cada mejora. La sección "Inventario de fragmentos apoyados por IA" de ese archivo identifica, fragmento por fragmento, qué código partió de un borrador de IA y si se adoptó, modificó o descartó, con el criterio técnico aplicado.
 
 ## Estado de los criterios de la Unidad 3
 
