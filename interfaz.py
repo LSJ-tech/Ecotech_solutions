@@ -14,6 +14,7 @@ if sys.platform == "win32":
 from main import (
 	CAMPO_NOMBRE_DEPARTAMENTO,
 	DATABASE_PATH,
+	LARGO_MINIMO_CONTRASENA,
 	ROLES_VALIDOS,
 	Empleado,
 	ExportadorExcel,
@@ -59,6 +60,7 @@ from main import (
 	listar_registros_tiempo,
 	listar_usuarios,
 	sumar_horas_empleado,
+	validar_contrasena,
 	validar_descripcion_tarea,
 	validar_horas,
 	validar_monto,
@@ -247,6 +249,20 @@ def leer_contrasena_validada(mensaje: str = MENSAJE_CONTRASENA) -> str:
 	while True:
 		try:
 			return validar_texto(leer_contrasena(mensaje), "La contraseña")
+		except ValueError as error:
+			print(error)
+
+
+def leer_contrasena_nueva(mensaje: str = MENSAJE_CONTRASENA) -> str:
+	"""Solicita una contraseña nueva que cumpla la política y repite solo ese campo."""
+
+	print(
+		f"La contraseña debe tener al menos {LARGO_MINIMO_CONTRASENA} caracteres "
+		"y combinar letras y números."
+	)
+	while True:
+		try:
+			return validar_contrasena(leer_contrasena(mensaje))
 		except ValueError as error:
 			print(error)
 
@@ -537,7 +553,7 @@ def registrar_usuario_menu(
 ) -> None:
 	"""Registra un usuario; con rol_forzado no se pregunta el rol (primer administrador)."""
 
-	contrasena = leer_contrasena_validada()
+	contrasena = leer_contrasena_nueva()
 	rol = rol_forzado or leer_rol()
 	if rol in ROLES_GESTION:
 		while True:

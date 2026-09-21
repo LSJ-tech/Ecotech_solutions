@@ -34,6 +34,7 @@ VARIABLES_CODIGO_ROL = {
 ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 LARGO_MAXIMO_DESCRIPCION_TAREA = 200
+LARGO_MINIMO_CONTRASENA = 8
 CODIFICACION = "utf-8"
 # Valor hora según la fórmula de la Dirección del Trabajo: sueldo mensual / 30 x 7 / jornada semanal.
 JORNADA_SEMANAL_HORAS = 44
@@ -480,10 +481,24 @@ def migrar_tabla_empleados(connection: sqlite3.Connection) -> None:
 		connection.execute("PRAGMA foreign_keys = ON")
 
 
+def validar_contrasena(valor: str) -> str:
+	"""Exige una contraseña de al menos 8 caracteres con letras y dígitos, sin espacios en los bordes."""
+
+	contrasena = validar_texto(valor, "La contraseña")
+	if len(contrasena) < LARGO_MINIMO_CONTRASENA:
+		raise ValueError(
+			f"La contraseña debe tener al menos {LARGO_MINIMO_CONTRASENA} caracteres."
+		)
+	if not any(c.isalpha() for c in contrasena) or not any(c.isdigit() for c in contrasena):
+		raise ValueError("La contraseña debe combinar letras y números.")
+	return contrasena
+
+
 def generar_hash_contrasena(contrasena: str) -> str:
 	"""Genera un hash PBKDF2 con sal para no guardar contrasenas planas."""
 
-	contrasena = validar_texto(contrasena, "La contraseña")
+	# Único punto por el que pasa toda contraseña persistida: la política no se puede eludir.
+	contrasena = validar_contrasena(contrasena)
 	sal = secrets.token_bytes(16)
 	hash_contrasena = hashlib.pbkdf2_hmac(
 		"sha256", contrasena.encode(CODIFICACION), sal, 120_000
@@ -1261,9 +1276,7 @@ class Usuario:
 	def actualizar_contrasena(self, nueva_contrasena: str) -> None:
 		"""Actualiza la contraseña a través de una operación controlada."""
 
-		if not nueva_contrasena:
-			raise ValueError("La contraseña no puede estar vacía.")
-		self._contrasena = nueva_contrasena
+		self._contrasena = validar_contrasena(nueva_contrasena)
 
 
 @dataclass
@@ -1527,6 +1540,98 @@ def registrar_tiempo(registro: RegistroTiempo) -> None:
 		registro.empleado.registros_tiempo.append(registro)
 	if registro not in registro.proyecto.registros_tiempo:
 		registro.proyecto.registros_tiempo.append(registro)
+
+
+__all__ = [
+	"CAMPO_NOMBRE_DEPARTAMENTO",
+	"CODIFICACION",
+	"DATABASE_PATH",
+	"DIAS_MES",
+	"DIAS_SEMANA",
+	"JORNADA_SEMANAL_HORAS",
+	"LARGO_MAXIMO_DESCRIPCION_TAREA",
+	"PATRON_TELEFONO",
+	"PREFIJO_TOKEN_FERNET",
+	"ROLES_VALIDOS",
+	"SCHEMA_SQL",
+	"VARIABLES_CODIGO_ROL",
+	"VARIABLE_CLAVE_CIFRADO",
+	"CifradorDatos",
+	"DatosPersonalesCifrados",
+	"Departamento",
+	"Empleado",
+	"ExportadorExcel",
+	"ExportadorPDF",
+	"IExportador",
+	"Informe",
+	"Pago",
+	"Proyecto",
+	"RegistroTiempo",
+	"ServicioReportes",
+	"Usuario",
+	"actualizar_departamento",
+	"actualizar_empleado",
+	"actualizar_proyecto",
+	"actualizar_registro_tiempo",
+	"actualizar_usuario",
+	"asignar_empleado_a_departamento",
+	"asignar_empleado_a_proyecto",
+	"asignar_empleado_departamento_bd",
+	"asignar_empleado_proyecto_bd",
+	"asignar_gerente_departamento",
+	"calcular_pago",
+	"calcular_tarifa_hora",
+	"cifrar_datos_personales",
+	"cifrar_datos_personales_pendientes",
+	"conectar_bd",
+	"construir_informe_departamentos",
+	"construir_informe_empleados",
+	"construir_informe_proyectos",
+	"construir_informe_registros",
+	"contar_registros_proyecto",
+	"desasignar_empleado_de_proyecto",
+	"desasignar_empleado_proyecto_bd",
+	"descifrar_fila_empleado",
+	"descifrar_valor",
+	"eliminar_departamento",
+	"eliminar_empleado",
+	"eliminar_proyecto",
+	"eliminar_registro_tiempo",
+	"eliminar_usuario",
+	"fila_a_empleado",
+	"formatear_celda",
+	"generar_clave_cifrado",
+	"generar_hash_contrasena",
+	"guardar_departamento",
+	"guardar_empleado",
+	"guardar_proyecto",
+	"guardar_registro_tiempo",
+	"guardar_usuario",
+	"guardar_usuario_con_empleado",
+	"inicializar_bd",
+	"listar_departamentos",
+	"listar_empleados",
+	"listar_empleados_proyecto",
+	"listar_proyectos",
+	"listar_registros_tiempo",
+	"listar_usuarios",
+	"migrar_tabla_empleados",
+	"obtener_codigo_rol",
+	"registrar_tiempo",
+	"revertir_si_falla",
+	"sumar_horas_empleado",
+	"validar_ciudad_opcional",
+	"validar_contrasena",
+	"validar_descripcion_tarea",
+	"validar_horas",
+	"validar_monto",
+	"validar_rut",
+	"validar_telefono",
+	"validar_texto",
+	"verificar_codigo_rol",
+	"verificar_contrasena",
+	"verificar_gerente",
+]
 
 
 if __name__ == "__main__":

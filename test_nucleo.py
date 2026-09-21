@@ -184,7 +184,7 @@ class PruebasPersistenciaEmpleado(unittest.TestCase):
 			)
 
 	def test_usuario_con_empleado_guarda_la_ficha_completa(self):
-		usuario = main.Usuario(0, "aperez", "clave", rol="empleado")
+		usuario = main.Usuario(0, "aperez", "Clave1234", rol="empleado")
 		main.guardar_usuario_con_empleado(self.connection, usuario, empleado_completo())
 		leido = main.fila_a_empleado(self.connection.execute("SELECT * FROM empleados").fetchone())
 		self.assertEqual((leido.direccion, leido.salario), ("Av. Siempre Viva 123", 1_200_000.0))
@@ -256,7 +256,7 @@ class PruebasMenuEmpleado(unittest.TestCase):
 		self.connection.close()
 
 	def test_registro_pide_ficha_completa_y_repite_solo_el_campo_invalido(self):
-		ui.leer_contrasena = lambda mensaje: "clave"
+		ui.leer_contrasena = lambda mensaje: "Clave1234"
 		salida = ejecutar_con_entradas(
 			lambda: ui.registrar_usuario_menu(self.connection),
 			["empleado", "Ana", "Perez", "Soto", RUT, "ana@x.cl", "Dev",
@@ -311,7 +311,7 @@ class PruebasAcceso(unittest.TestCase):
 	def setUp(self):
 		self.connection = main.conectar_bd(":memory:")
 		main.inicializar_bd(self.connection)
-		ui.leer_contrasena = lambda mensaje: "1234" if "Codigo" in mensaje else "clave"
+		ui.leer_contrasena = lambda mensaje: "1234" if "Codigo" in mensaje else "Clave1234"
 		os.environ["ECOTECH_CODIGO_ADMIN"] = "1234"
 
 	def tearDown(self):
@@ -332,7 +332,7 @@ class PruebasAcceso(unittest.TestCase):
 		self.assertEqual(fila["rol"], "admin")
 
 	def test_con_usuarios_no_hay_autoregistro(self):
-		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "clave", rol="admin"))
+		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "Clave1234", rol="admin"))
 		self.assertTrue(ui.hay_usuarios(self.connection))
 		salida = ejecutar_con_entradas(lambda: ui.mostrar_menu_acceso(True), ["0"])
 		self.assertNotIn("Registrar", salida)
@@ -344,12 +344,12 @@ class PruebasAcceso(unittest.TestCase):
 		ui.leer_contrasena = lambda mensaje: "   "
 		salida = ejecutar_con_entradas(lambda: ui.autenticar_usuario(self.connection), ["admin"])
 		self.assertIn("no pueden estar vacíos", salida)
-		ui.leer_contrasena = lambda mensaje: "clave"
+		ui.leer_contrasena = lambda mensaje: "Clave1234"
 		salida = ejecutar_con_entradas(lambda: ui.autenticar_usuario(self.connection), [""])
 		self.assertIn("no pueden estar vacíos", salida)
 
 	def test_login_correcto_devuelve_usuario_con_rol(self):
-		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "clave", rol="admin"))
+		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "Clave1234", rol="admin"))
 		resultado = {}
 		ejecutar_con_entradas(
 			lambda: resultado.setdefault("u", ui.autenticar_usuario(self.connection)), ["admin"]
@@ -476,7 +476,7 @@ class PruebasCrudCompleto(unittest.TestCase):
 			main.RegistroTiempo(0, date(2026, 1, 2), 8, self.empleado, self.proyecto, "Cableado"),
 		)
 		self.admin = main.Usuario(1, "admin", "x", rol="admin")
-		self.cuenta_empleado = main.Usuario(2, "aperez", "x", empleado=self.empleado, rol="empleado")
+		self.cuenta_empleado = main.Usuario(2, "aperez", "Clave1234", empleado=self.empleado, rol="empleado")
 
 	def tearDown(self):
 		self.connection.close()
@@ -708,6 +708,54 @@ class PruebasInformes(unittest.TestCase):
 		archivos = list(self.carpeta.glob("informe_de_departamentos_*.txt"))
 		self.assertEqual(len(archivos), 1)
 		self.assertIn("Ventas", archivos[0].read_text(encoding="utf-8"))
+
+
+class PruebasPoliticaContrasenas(unittest.TestCase):
+	"""Política de contraseñas aplicada al persistir y al registrar desde el menú."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+
+	def tearDown(self):
+		self.connection.close()
+
+	def test_validar_contrasena_exige_largo_letras_y_digitos(self):
+		self.assertEqual(main.validar_contrasena("  Clave1234 "), "Clave1234")
+		for invalida in ["", "corta1", "soloLetras", "12345678", "        "]:
+			with self.subTest(invalida=invalida), self.assertRaises(ValueError):
+				main.validar_contrasena(invalida)
+
+	def test_persistir_y_actualizar_pasan_por_la_politica(self):
+		with self.assertRaisesRegex(ValueError, "8 caracteres"):
+			main.guardar_usuario(self.connection, main.Usuario(0, "u", "corta1", rol="admin"))
+		self.assertEqual(self.connection.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0], 0)
+		usuario = main.Usuario(0, "u", "Clave1234", rol="admin")
+		with self.assertRaisesRegex(ValueError, "letras y números"):
+			usuario.actualizar_contrasena("solo-letras")
+		usuario.actualizar_contrasena("Nueva5678")
+		self.assertTrue(main.verificar_contrasena("Nueva5678", main.generar_hash_contrasena("Nueva5678")))
+
+	def test_menu_repite_la_contrasena_hasta_cumplir_la_politica(self):
+		intentos = iter(["corta1", "sinnumeros", "Clave1234"])
+		ui.leer_contrasena = lambda mensaje: next(intentos)
+		salida = ejecutar_con_entradas(
+			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="empleado"),
+			["Ana", "Perez", "Soto", RUT, "ana@x.cl", "Dev", "Av. Uno 1", "+56 9 1234 5678",
+			 "2025-03-01", "1200000"],
+		)
+		self.assertIn("8 caracteres", salida)
+		self.assertIn("letras y números", salida)
+		self.assertIn("registrado correctamente", salida)
+
+	def test_el_codigo_secreto_no_esta_sujeto_a_la_politica(self):
+		os.environ["ECOTECH_CODIGO_ADMIN"] = "1234"
+		ui.leer_contrasena = lambda mensaje: "1234" if "Codigo" in mensaje else "Clave1234"
+		salida = ejecutar_con_entradas(
+			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="admin"),
+			["Logan", "Silva", "Jara"],
+		)
+		self.assertIn("lsilva", salida)
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@
 25. Cambio 39 (alineación con la Unidad 1, paso 4): gerente de departamento y descripción de tareas en el registro de tiempo.
 26. Cambio 40 (alineación con la Unidad 1, paso 5): CRUD completo desde el menú y desasignación de proyectos.
 27. Cambio 41 (alineación con la Unidad 1, paso 6): informes de las cuatro entidades exportados a archivo.
+28. Cambio 42 (alineación con la Unidad 1, paso 7): política de contraseñas y restauración de `__all__`.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1161,3 +1162,26 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 
 - `py -3 -m py_compile main.py interfaz.py test_nucleo.py` y `ruff check --select F` sin nombres indefinidos.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 77 pruebas en verde. Las seis nuevas verifican la validación e inmutabilidad de `Informe` y su nombre de archivo; la alineación de columnas y el vacío para `None` en texto; el escapado de comas y comillas en CSV; que `guardar()` crea la carpeta, usa la extensión del exportador y escribe el BOM en CSV; que el informe de empleados excluye dirección, teléfono y salario; y que el menú no genera archivo sin datos, repite un formato inválido y guarda el informe de departamentos en la carpeta indicada.
+
+## Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `test_nucleo.py`
+**Objetivo:** cumplir el requisito "autenticación robusta con contraseñas seguras" de la guía de la Unidad 1 y reforzar el criterio 3.1.2. Hasta ahora la única condición era que la contraseña no estuviera vacía.
+
+### Implementación
+
+- `validar_contrasena()` en `main.py`: al menos `LARGO_MINIMO_CONTRASENA` (8) caracteres, con al menos una letra y un dígito; los espacios en los bordes se descartan. Se aplica en `generar_hash_contrasena()`, único punto por el que pasa toda contraseña que se persiste (`guardar_usuario()` y `guardar_usuario_con_empleado()`), y en `Usuario.actualizar_contrasena()`, de modo que ninguna ruta de código puede guardar una contraseña débil.
+- `leer_contrasena_nueva()` en la interfaz muestra la política antes de pedir la contraseña y repite solo ese campo ante un valor inválido; se usa en el registro de cuentas. `leer_contrasena_validada()` se conserva para los códigos secretos de rol, que no están sujetos a la política.
+- El login no valida la política (solo rechaza vacíos): las cuentas creadas antes de este cambio deben poder seguir entrando; la política se exige al crear o cambiar la contraseña.
+
+### Revisión técnica
+
+- La IA propuso exigir además mayúscula, minúscula y símbolo. Se descartó: para un sistema interno de consola la combinación de largo mínimo y letras + dígitos es suficiente y no empuja a los usuarios a anotar la contraseña; la función centraliza la regla y puede endurecerse en una sola línea.
+- Se evaluó validar en el constructor de `Usuario`. Se descartó porque el objeto también representa a la sesión autenticada (con la contraseña sustituida por asteriscos) y a filas leídas de la base (hash), que no deben cumplir la política. Validar al persistir es el punto correcto.
+- Hallazgo propio: al revisar `__all__` para exportar `validar_contrasena` se comprobó que el Cambio 41 lo había eliminado por error (el reemplazo del bloque de informes abarcó la lista, que estaba entre `ServicioReportes` y las operaciones de dominio). El programa no se vio afectado porque `interfaz.py` importa nombres explícitos, pero la API pública documentada en el Readme había desaparecido. Se restauró generándola desde los nombres públicos del módulo (87 entradas), con lo que además quedó completa (antes faltaban `actualizar_*`, `eliminar_*` y otros).
+
+### Validación
+
+- `py -3 -m py_compile` y `ruff check --select F` sin errores.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 81 pruebas en verde. Las cuatro nuevas verifican que la validación acepta una contraseña válida (recortando espacios) y rechaza vacía, corta, sin dígitos, sin letras o solo espacios; que `guardar_usuario()` no persiste una contraseña débil y que `actualizar_contrasena()` la rechaza; que el menú repite la contraseña con el mensaje correspondiente hasta que cumple; y que el código secreto `1234` sigue aceptándose para registrar al administrador. Las pruebas existentes que persistían la contraseña `clave` se actualizaron a una que cumple la política.
