@@ -1,0 +1,223 @@
+%% Diagrama de clases de EcoTechSolutions (Unidades 1 a 3).
+%% Renderizar en https://mermaid.live y exportar como uml.png.
+classDiagram
+    direction TB
+
+    %% ===================== NÚCLEO DE DOMINIO (main.py) =====================
+
+    class Departamento {
+        <<dataclass>>
+        -id_departamento: int
+        -nombre: str
+        -gerente: Optional~Empleado~
+        -empleados: list~Empleado~
+    }
+
+    class Empleado {
+        <<dataclass>>
+        -id_empleado: int
+        -rut: str
+        -nombre: str
+        -apellido: str
+        -direccion: str
+        -telefono: str
+        -correo: str
+        -cargo: str
+        -fecha_inicio_contrato: date
+        -salario: float
+        -departamento: Optional~Departamento~
+        -proyectos: list~Proyecto~
+        -registros_tiempo: list~RegistroTiempo~
+    }
+
+    class Proyecto {
+        <<dataclass>>
+        -id_proyecto: int
+        -nombre: str
+        -descripcion: str
+        -fecha_inicio: date
+        -fecha_fin: Optional~date~
+        -ciudad: Optional~str~
+        -empleados: list~Empleado~
+        -registros_tiempo: list~RegistroTiempo~
+    }
+
+    class RegistroTiempo {
+        <<dataclass>>
+        -id_registro: int
+        -fecha: date
+        -horas: float
+        -descripcion_tarea: str
+        -empleado: Empleado
+        -proyecto: Proyecto
+    }
+
+    class Usuario {
+        -id_usuario: int
+        -nombre_usuario: str
+        -_contrasena: str
+        -activo: bool
+        -empleado: Optional~Empleado~
+        -rol: str
+        +contrasena() str
+        +obtener_contrasena_interna() str
+        +verificar_contrasena(contrasena: str) bool
+        +actualizar_contrasena(nueva_contrasena: str) None
+    }
+
+    class Pago {
+        <<frozen dataclass>>
+        -rut: str
+        -horas: float
+        -tarifa_hora_clp: float
+        -monto_clp: float
+        -moneda: str
+        -valor_cambio: float
+        -monto_moneda: float
+    }
+
+    %% ===================== SEGURIDAD (main.py) =====================
+
+    class CifradorDatos {
+        -_fernet: Fernet
+        +cifrar(texto: str) str
+        +descifrar(token: str) str
+    }
+
+    %% ===================== INFORMES (main.py) =====================
+
+    class Informe {
+        <<frozen dataclass>>
+        -titulo: str
+        -columnas: list~str~
+        -filas: list~tuple~
+    }
+
+    class IExportador {
+        <<abstract>>
+        +extension: str*
+        +exportar(informe: Informe) str*
+    }
+
+    class ExportadorPDF {
+        +extension: str
+        +exportar(informe: Informe) str
+    }
+
+    class ExportadorExcel {
+        +extension: str
+        +exportar(informe: Informe) str
+    }
+
+    class ServicioReportes {
+        -_exportador: IExportador
+        +generar(informe: Informe) str
+        +guardar(informe: Informe, carpeta: Path) Path
+    }
+
+    %% ===================== SERVICIOS EXTERNOS (servicios_externos.py) =====================
+
+    class ErrorServicioExterno {
+        <<exception>>
+    }
+
+    class ClienteHTTP {
+        -_base_url: str
+        -_timeout: float
+        -_sesion: requests.Session
+        +obtener_json(ruta: str, parametros: dict) dict
+        -_procesar_respuesta(respuesta: Response, url: str)$ dict
+    }
+
+    class IServicioExterno {
+        <<abstract>>
+        +consultar(criterio: str) Any*
+    }
+
+    class ServicioClima {
+        +URL_BASE: str$
+        +VARIABLE_LLAVE: str$
+        -_cliente: ClienteHTTP
+        -_llave: str
+        +consultar(criterio: str) Clima
+        -_interpretar(ciudad: str, datos: dict)$ Clima
+    }
+
+    class ServicioIndicadores {
+        +URL_BASE: str$
+        -_cliente: ClienteHTTP
+        +consultar(criterio: str) Indicador
+        -_interpretar(codigo: str, datos: dict)$ Indicador
+    }
+
+    class Clima {
+        <<frozen dataclass>>
+        -ciudad: str
+        -temperatura: float
+        -humedad: int
+        -descripcion: str
+        -fecha_consulta: datetime
+    }
+
+    class Indicador {
+        <<frozen dataclass>>
+        -codigo: str
+        -nombre: str
+        -moneda: str
+        -valor: float
+        -fecha: date
+        -fecha_consulta: datetime
+    }
+
+    class ResultadoConsulta~T~ {
+        <<frozen dataclass>>
+        -dato: T
+        -desde_respaldo: bool
+        -motivo: Optional~str~
+    }
+
+    %% ===================== RELACIONES DEL DOMINIO =====================
+
+    Departamento "1" o-- "0..*" Empleado : agrupa
+    Departamento "0..1" --> "0..1" Empleado : dirigido por
+    Usuario "0..1" --> "0..1" Empleado : pertenece a
+    Proyecto "0..*" o-- "0..*" Empleado : tiene asignados
+    Empleado "1" *-- "0..*" RegistroTiempo : registra
+    Proyecto "1" *-- "0..*" RegistroTiempo : posee
+    CifradorDatos ..> Empleado : protege direccion, telefono y salario
+
+    %% ===================== RELACIONES DE INFORMES =====================
+
+    ServicioReportes --> IExportador : utiliza estrategia
+    ServicioReportes ..> Informe : exporta
+    Informe ..> Empleado : datos de
+    Informe ..> Departamento : datos de
+    Informe ..> Proyecto : datos de
+    Informe ..> RegistroTiempo : datos de
+    IExportador <|.. ExportadorPDF : hereda de
+    IExportador <|.. ExportadorExcel : hereda de
+
+    %% ===================== RELACIONES DE SERVICIOS EXTERNOS =====================
+
+    IServicioExterno <|.. ServicioClima : hereda de
+    IServicioExterno <|.. ServicioIndicadores : hereda de
+    ServicioClima --> ClienteHTTP : usa
+    ServicioIndicadores --> ClienteHTTP : usa
+    ServicioClima ..> Clima : produce
+    ServicioIndicadores ..> Indicador : produce
+    ClienteHTTP ..> ErrorServicioExterno : lanza
+    ResultadoConsulta ..> Clima : envuelve
+    ResultadoConsulta ..> Indicador : envuelve
+
+    %% ===================== INTEGRACIÓN UNIDAD 3 CON EL DOMINIO =====================
+
+    Proyecto ..> ServicioClima : ciudad consultada
+    Empleado ..> Pago : salario y horas
+    Indicador ..> Pago : tipo de cambio
+
+    %% ===================== NOTAS =====================
+
+    note for Departamento "Operaciones de dominio (funciones de main.py):\nasignar_empleado_a_departamento()\nasignar_empleado_a_proyecto()\ndesasignar_empleado_de_proyecto()\nregistrar_tiempo()\ncalcular_pago()"
+    note for Usuario "Contrasena con PBKDF2-SHA256 y sal.\nRoles: admin, rrhh, empleado.\nSolo admin/rrhh registran cuentas;\nel autoregistro crea unicamente\nel primer usuario."
+    note for ClienteHTTP "HTTPS obligatorio, timeout 8 s,\nun reintento ante timeout/5xx,\nlimite 1 MB, errores traducidos\nsin URL ni llave."
+    note for ResultadoConsulta "consultar_con_respaldo():\nsi el servicio falla, entrega el\nultimo dato guardado en SQLite\n(consultas_clima / indicadores)."

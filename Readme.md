@@ -44,7 +44,9 @@ Ecotech_solutions/
 ├── Readme.md
 ├── VALIDACION_IA.md
 ├── Rubrica.pdf
+├── TI3V21_U1_ES_GUÍA primera parte.pdf
 ├── TI3V21_U2_U3_ES02_GUÍA.docx
+├── uml.mmd
 └── uml.png
 ```
 
@@ -60,7 +62,9 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 - Un proyecto puede tener una ciudad asociada (Unidad 3), usada para consultar el clima.
 - Las consultas de clima e indicadores se guardan localmente (`consultas_clima`, `indicadores`) como respaldo.
 
-El diagrama original se encuentra en `uml.png`.
+El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
+
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Empleado` sin `id_empleado`, `direccion`, `telefono`, `fecha_inicio_contrato` ni `salario`; `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `CifradorDatos`, `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; y el autoregistro de cuentas `empleado` todavía abierto.
 
 ## Estado de los criterios
 

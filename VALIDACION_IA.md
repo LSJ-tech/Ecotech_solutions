@@ -22,6 +22,7 @@
 18. Cambio 32 (Unidad 3, paso 5): revisión de seguridad final, pruebas automatizadas y cierre de la unidad.
 19. Cambio 33: avisos de mantenibilidad SonarQube tras la Unidad 3.
 20. Cambio 34: reglas S5778, S5906 y S8572 de SonarQube y protección de la llave en el registro técnico.
+21. Cambio 35: revisión contra la rúbrica y la guía de la Unidad 1; modelo UML unificado en `uml.mmd`.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -964,3 +965,31 @@ Para que esta decisión quede verificada y no dependa de la memoria del equipo, 
 - `py -3 -m py_compile servicios_externos.py test_servicios_externos.py` finalizó correctamente.
 - `py -3 -m unittest test_servicios_externos`: 28 pruebas en verde (27 anteriores más la del registro técnico).
 - Cada bloque `assertRaises` del archivo contiene ahora una sola llamada.
+
+## Cambio 35 - Revisión contra la rúbrica y la guía de la Unidad 1; modelo UML unificado
+
+**Fecha:** 2026-09-21
+**Archivo creado:** `uml.mmd`
+**Archivos incorporados:** `TI3V21_U1_ES_GUÍA primera parte.pdf` (guía de la Unidad 1 con los requisitos del sistema)
+**Objetivo:** verificar el cumplimiento de la rúbrica (22 indicadores) y de los requisitos del sistema definidos en la Unidad 1, y dejar un único modelo de clases que integre el UML original, esos requisitos y el código de las Unidades 2 y 3.
+
+### Revisión de la rúbrica
+
+Se leyó la rúbrica completa (PDF escaneado, extraído como imagen). Los 13 indicadores grupales suman 30 puntos y los 9 individuales de defensa otros 30. Los indicadores de la Unidad 3 (3.1.1 a 3.1.4) están cubiertos por los cambios 27 a 34. Los riesgos detectados están en la Unidad 2: 2.1.1.G.1 exige correspondencia entre el UML y el código, y 2.1.3.G.5 exige demostrar registro, consulta, actualización y eliminación; el menú solo expone crear y listar para la mayoría de las entidades.
+
+### Revisión de los requisitos de la Unidad 1
+
+Al contrastar el código con la guía de la Unidad 1 se comprobó que las diferencias entre `uml.png` y `main.py` no eran arbitrarias: los atributos del diagrama provienen de requisitos explícitos. Requisitos aún no implementados: datos personales del empleado (dirección, teléfono, fecha de inicio de contrato, salario) e ID único automático; gerente del departamento; descripción de tareas en el registro de tiempo; edición y eliminación de departamentos y proyectos desde la interfaz; desasignación de empleados de proyectos; informes de las cuatro entidades exportables a archivo; cifrado de datos personales en reposo. Además, la pantalla de acceso permite que cualquier persona cree una cuenta de rol `empleado` sin aprobación, lo que contradice el requisito de que el registro lo realice RR.HH.
+
+### Modelo unificado
+
+`uml.mmd` (Mermaid `classDiagram`) conserva la notación del diagrama original (visibilidad, multiplicidades, etiquetas de relación) y define el modelo objetivo: las clases de dominio con los atributos de los requisitos, `CifradorDatos`, `Informe` y `ServicioReportes.guardar()`, y las clases de la Unidad 3 (`IServicioExterno`, `ServicioClima`, `ServicioIndicadores`, `ClienteHTTP`, `Clima`, `Indicador`, `ResultadoConsulta`, `Pago`, `ErrorServicioExterno`). El Readme lista las diferencias vigentes entre el modelo y el código hasta que se completen los cambios siguientes.
+
+### Revisión técnica
+
+Se descartó ajustar el diagrama al código actual (eliminar del modelo los atributos no implementados), porque habría ocultado requisitos sin cumplir. Se decidió que el diagrama sea el objetivo y el código se alinee con él, en este orden: empleado completo con salario usado por el cálculo de pago; cifrado de datos personales; autoregistro limitado al primer usuario; gerente y descripción de tarea; CRUD completo y desasignación en el menú; informes exportables a archivo. El diagrama se generó con apoyo de IA a partir del código y del UML original y se revisó manualmente clase por clase.
+
+### Validación
+
+- El archivo `uml.mmd` se renderiza en mermaid.live sin errores de sintaxis.
+- Cada clase, atributo y método del diagrama corresponde a código existente o a un requisito de la guía de la Unidad 1 identificado en esta revisión.
