@@ -2,6 +2,7 @@
 
 from datetime import date
 from getpass import getpass
+from typing import Callable
 import logging
 import sqlite3
 import sys
@@ -813,84 +814,73 @@ def mostrar_registros_tiempo_menu(
 		)
 
 
-def ejecutar_opcion_menu(
-	connection: sqlite3.Connection, usuario_actual: Usuario, opcion: str
-) -> bool:
+OpcionMenu = tuple[str, str, Callable[[], None]]
+
+
+def construir_opciones_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> list[OpcionMenu]:
+	"""Devuelve las opciones (numero, descripcion, accion) permitidas para el rol, en orden."""
+
+	gestion = usuario_actual.rol in ROLES_GESTION
+	admin = usuario_actual.rol == "admin"
+
+	def etiqueta(general: str, propia: str) -> str:
+		return general if gestion else propia
+
+	# Una sola tabla define numero, texto, permiso y accion; asi la numeracion no se desalinea.
+	opciones = [
+		("1", "Gestionar departamentos", gestion,
+			lambda: gestionar_departamentos_menu(connection, usuario_actual)),
+		("2", "Listar departamentos", True, lambda: mostrar_departamentos(connection)),
+		("3", "Listar empleados", True, lambda: mostrar_empleados(connection)),
+		("4", "Crear proyecto", gestion, lambda: crear_proyecto_menu(connection, usuario_actual)),
+		("5", "Listar proyectos", True, lambda: mostrar_proyectos(connection)),
+		("6", "Asignar empleado a proyecto", gestion,
+			lambda: asignar_proyecto_menu(connection, usuario_actual)),
+		("7", etiqueta("Registrar horas trabajadas", "Registrar mis horas trabajadas"), True,
+			lambda: registrar_tiempo_menu(connection, usuario_actual)),
+		("8", etiqueta("Ver registros de tiempo", "Ver mis horas registradas"), True,
+			lambda: mostrar_registros_tiempo_menu(connection, usuario_actual)),
+		("9", etiqueta("Generar reporte", "Generar mi reporte"), True,
+			lambda: mostrar_reportes_menu(connection, usuario_actual)),
+		("10", "Consultar clima de un proyecto", True, lambda: consultar_clima_menu(connection)),
+		("11", "Consultar indicador economico", True,
+			lambda: consultar_indicador_menu(connection)),
+		("12", "Calcular pago en moneda extranjera", gestion,
+			lambda: calcular_pago_menu(connection, usuario_actual)),
+		("13", "Crear usuario", gestion, lambda: crear_usuario_admin_menu(connection, usuario_actual)),
+		("14", "Listar usuarios", gestion,
+			lambda: listar_usuarios_admin_menu(connection, usuario_actual)),
+		("15", "Cambiar rol de usuario", admin, lambda: cambiar_rol_menu(connection, usuario_actual)),
+		("16", "Eliminar usuario", admin,
+			lambda: eliminar_usuario_admin_menu(connection, usuario_actual)),
+	]
+	return [(numero, texto, accion) for numero, texto, permitido, accion in opciones if permitido]
+
+
+def mostrar_opciones_menu(opciones: list[OpcionMenu]) -> None:
+	"""Muestra las opciones permitidas para el rol actual."""
+
+	print("\n=== ECOTECH SOLUTIONS ===")
+	for numero, descripcion, _accion in opciones:
+		print(f"{numero}. {descripcion}")
+	print("0. Salir")
+
+
+def ejecutar_opcion_menu(opciones: list[OpcionMenu], opcion: str) -> bool:
 	"""Ejecuta una opcion del menu y devuelve si debe continuar."""
 
-	acciones = {
-		"1": lambda: gestionar_departamentos_menu(connection, usuario_actual),
-		"2": lambda: mostrar_departamentos(connection),
-		"4": lambda: mostrar_empleados(connection),
-		"5": lambda: crear_proyecto_menu(connection, usuario_actual),
-		"6": lambda: mostrar_proyectos(connection),
-		"7": lambda: asignar_proyecto_menu(connection, usuario_actual),
-		"8": lambda: registrar_tiempo_menu(connection, usuario_actual),
-		"9": lambda: mostrar_registros_tiempo_menu(connection, usuario_actual),
-		"10": lambda: mostrar_reportes_menu(connection, usuario_actual),
-		"11": lambda: crear_usuario_admin_menu(connection, usuario_actual),
-		"12": lambda: listar_usuarios_admin_menu(connection, usuario_actual),
-		"13": lambda: cambiar_rol_menu(connection, usuario_actual),
-		"14": lambda: eliminar_usuario_admin_menu(connection, usuario_actual),
-		"15": lambda: consultar_clima_menu(connection),
-		"16": lambda: consultar_indicador_menu(connection),
-		"17": lambda: calcular_pago_menu(connection, usuario_actual),
-	}
 	if opcion == "0":
 		print("Sesion finalizada.")
 		return False
+	acciones = {numero: accion for numero, _texto, accion in opciones}
 	accion = acciones.get(opcion)
 	if accion is None:
 		print(MENSAJE_OPCION_INVALIDA)
 		return True
 	accion()
 	return True
-
-
-def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
-	"""Muestra solo las opciones permitidas para el rol actual."""
-
-	opciones = [
-		("2", "Listar departamentos"),
-		("4", "Listar empleados"),
-		("6", "Listar proyectos"),
-		(
-			"8",
-			"Registrar horas trabajadas"
-			if usuario_actual.rol in ROLES_GESTION
-			else "Registrar mis horas trabajadas",
-		),
-		(
-			"9",
-			"Ver registros de tiempo"
-			if usuario_actual.rol in ROLES_GESTION
-			else "Ver mis horas registradas",
-		),
-		(
-			"10",
-			"Generar reporte"
-			if usuario_actual.rol in ROLES_GESTION
-			else "Generar mi reporte",
-		),
-		("15", "Consultar clima de un proyecto"),
-		("16", "Consultar indicador economico"),
-	]
-	if usuario_actual.rol in ROLES_GESTION:
-		opciones.insert(0, ("1", "Gestionar departamentos"))
-		opciones.insert(3, ("5", "Crear proyecto"))
-		opciones.insert(5, ("7", "Asignar empleado a proyecto"))
-		opciones.extend([
-			("11", "Crear usuario"),
-			("12", "Listar usuarios"),
-		])
-		if usuario_actual.rol == "admin":
-			opciones.append(("13", "Cambiar rol de usuario"))
-			opciones.append(("14", "Eliminar usuario"))
-		opciones.append(("17", "Calcular pago en moneda extranjera"))
-	print("\n=== ECOTECH SOLUTIONS ===")
-	for numero, descripcion in opciones:
-		print(f"{numero}. {descripcion}")
-	print("0. Salir")
 
 
 def mostrar_menu() -> None:
@@ -918,11 +908,12 @@ def mostrar_menu() -> None:
 			f"(rol: {usuario_actual.rol})"
 		)
 		print(f"Base de datos conectada: {DATABASE_PATH.name}")
+		opciones = construir_opciones_menu(connection, usuario_actual)
 		while True:
-			mostrar_opciones_menu(usuario_actual)
+			mostrar_opciones_menu(opciones)
 			opcion = input(MENSAJE_SELECCION).strip()
 			try:
-				if not ejecutar_opcion_menu(connection, usuario_actual, opcion):
+				if not ejecutar_opcion_menu(opciones, opcion):
 					break
 			except (
 				ValueError,

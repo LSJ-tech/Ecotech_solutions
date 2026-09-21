@@ -18,6 +18,7 @@
 14. Cambio 28 (Unidad 3, paso 2): consumo de la API de clima con `requests`, validación y manejo de errores.
 15. Cambio 29 (Unidad 3, paso 3): indicadores económicos de mindicador.cl y cálculo de pagos en moneda extranjera.
 16. Cambio 30 (Unidad 3, paso 4): persistencia local de datos externos y respaldo ante fallos del servicio.
+17. Cambio 31: menú principal definido en una sola tabla y renumerado de forma consecutiva.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -838,3 +839,30 @@ Durante las pruebas se detectó que un dato con fecha posterior a la actual era 
 - Con servicio simulado: una consulta exitosa persiste una fila y no se marca como respaldo; ante `ConnectionError` se devuelve el dato guardado con el motivo; ante 503 sin respaldo se propaga `ErrorServicioExterno`; con dos valores guardados del dólar (958,42 y 960,00), un `Timeout` devuelve 960,00; un servicio desconocido produce `ValueError`; `obtener_ultimo_indicador(c, "bitcoin")` es rechazado por la lista blanca.
 - Base en archivo temporal: se guarda un clima, se cierra la conexión, se reabre y ante `Timeout` se recupera el respaldo.
 - Menú: opción 15 con el servicio caído muestra `Aviso: ... Se muestra el último dato guardado (consultado 2026-09-21 13:10)` y el clima; opción 16 muestra el aviso y `960.00`; opción 17 calcula `$100,000.00 CLP = 104.17 USD` sobre el respaldo; sin respaldo el error llega al bucle principal con mensaje limpio.
+
+## Cambio 31 - Menú principal en una sola tabla y renumeración
+
+**Fecha:** 2026-09-21
+**Archivo modificado:** `interfaz.py`
+**Objetivo:** corregir el desorden de la numeración del menú detectado al ejecutar el programa tras el paso 4.
+
+### Hallazgos
+
+Al probar el sistema, las opciones aparecían fuera de orden (`... 10, 15, 16, 11, 12, 13, 14, 17`) y faltaba el número 3. La causa era estructural: la numeración estaba definida dos veces, en el diccionario de acciones de `ejecutar_opcion_menu()` y en la lista de textos de `mostrar_opciones_menu()`, que además insertaba opciones por posición (`insert(3, ...)`, `insert(5, ...)`). Cada opción nueva de la Unidad 3 se agregó al final de ambas estructuras y el orden visual dejó de corresponder al numérico.
+
+### Implementación
+
+- Nueva función `construir_opciones_menu(connection, usuario_actual)` que define en una sola tabla el número, el texto (con variante para empleados donde corresponde), el permiso del rol y la acción de cada opción, y devuelve solo las permitidas, ya ordenadas.
+- `mostrar_opciones_menu()` y `ejecutar_opcion_menu()` reciben esa lista; la primera la imprime y la segunda la convierte en diccionario para ejecutar. Como ambas parten de la misma fuente, no pueden volver a desalinearse.
+- Renumeración consecutiva 1 a 16: se eliminó el hueco del 3 y las opciones de la Unidad 3 (clima, indicador, pago) quedaron en 10, 11 y 12, antes de la gestión de usuarios (13 a 16).
+- Efecto colateral positivo: una opción que el rol no ve tampoco existe en su diccionario de acciones, por lo que responde `Opcion no valida.` sin llegar a la función. Las verificaciones internas (`verificar_gestion()`, comprobaciones de `admin`) se conservan como segunda barrera.
+
+### Revisión técnica
+
+Se evaluó ordenar la lista existente con `sorted(..., key=int)` como arreglo mínimo. Se descartó porque mantenía la duplicación que originó el problema; la solución elegida elimina la causa y reduce el código. Los números de opción cambiaron respecto de lo documentado en los cambios 28 a 30 (15, 16 y 17 pasan a 10, 11 y 12); esas entradas se conservan como historia y el Readme refleja la numeración vigente con una tabla completa.
+
+### Validación
+
+- `py -3 -m py_compile interfaz.py` finalizó correctamente.
+- Para `admin`, `rrhh` y `empleado` los números del menú son estrictamente crecientes: `admin` 1-16, `rrhh` 1-14, `empleado` 2, 3, 5, 7, 8, 9, 10, 11.
+- Para `empleado`, la opción `16` (eliminar usuario) responde `Opcion no valida.` sin ejecutar nada; la opción `0` finaliza la sesión; la opción `2` ejecuta el listado de departamentos.

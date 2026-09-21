@@ -168,9 +168,9 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
 - Permitir que solo un administrador cambie roles o elimine otras cuentas.
 - Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
-- Consultar el clima actual de la ciudad de un proyecto (opción 15, disponible para todos los roles).
-- Consultar el valor vigente del dólar, el euro o la UF (opción 16, todos los roles).
-- Calcular el pago de un empleado en moneda extranjera según sus horas registradas y una tarifa por hora en CLP (opción 17, solo `admin` y `rrhh`).
+- Consultar el clima actual de la ciudad de un proyecto (opción 10, disponible para todos los roles).
+- Consultar el valor vigente del dólar, el euro o la UF (opción 11, todos los roles).
+- Calcular el pago de un empleado en moneda extranjera según sus horas registradas y una tarifa por hora en CLP (opción 12, solo `admin` y `rrhh`).
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
@@ -178,7 +178,29 @@ En el primer inicio se debe registrar el primer usuario. Para seleccionar el rol
 
 Las contraseñas y códigos secretos se muestran como asteriscos mientras se escriben. Las contraseñas se almacenan mediante PBKDF2 y no en texto plano.
 
-La interfaz centraliza mensajes y consultas reutilizadas, y separa el flujo de inicio de sesión en funciones auxiliares para mantener una complejidad cognitiva baja.
+La interfaz centraliza mensajes y consultas reutilizadas, y separa el flujo de inicio de sesión en funciones auxiliares para mantener una complejidad cognitiva baja. El menú principal se define en una sola tabla (`construir_opciones_menu()`) con número, texto, permiso y acción de cada opción; de ella se derivan tanto el listado en pantalla como la ejecución, por lo que las opciones no visibles para un rol tampoco son ejecutables.
+
+Menú completo (los roles ven solo lo permitido):
+
+| N.º | Opción | Roles |
+|---|---|---|
+| 1 | Gestionar departamentos | admin, rrhh |
+| 2 | Listar departamentos | todos |
+| 3 | Listar empleados | todos |
+| 4 | Crear proyecto | admin, rrhh |
+| 5 | Listar proyectos | todos |
+| 6 | Asignar empleado a proyecto | admin, rrhh |
+| 7 | Registrar horas trabajadas (los empleados, solo las propias) | todos |
+| 8 | Ver registros de tiempo (los empleados, solo los propios) | todos |
+| 9 | Generar reporte (los empleados, solo el propio) | todos |
+| 10 | Consultar clima de un proyecto | todos |
+| 11 | Consultar indicador económico | todos |
+| 12 | Calcular pago en moneda extranjera | admin, rrhh |
+| 13 | Crear usuario | admin, rrhh |
+| 14 | Listar usuarios | admin, rrhh |
+| 15 | Cambiar rol de usuario | admin |
+| 16 | Eliminar usuario | admin |
+| 0 | Salir | todos |
 
 Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh` requiere el código `ECOTECH_CODIGO_RRHH`, tiene permisos de gestión salvo cambiar roles y debe estar asociado a un empleado. El rol `admin` requiere el código `ECOTECH_CODIGO_ADMIN`; cambiar roles y eliminar usuarios son acciones exclusivas de `admin`.
 
@@ -249,8 +271,9 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Verificación de que los códigos de rol se leen desde `.env`, que un código faltante produce un mensaje claro sin exponer valores y que ningún secreto queda escrito en el código fuente.
 - Pruebas del servicio de clima con respuestas simuladas (`unittest.mock`): 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, cuerpo no JSON y JSON con campos faltantes o fuera de rango; ningún mensaje al usuario contiene la llave.
 - Verificación de la migración de `proyectos.ciudad` sobre una base antigua, del guardado y actualización de la ciudad, del rechazo de ciudades con números o símbolos y de la opción de menú 15.
-- Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; opción 17 restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
-- Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; opciones 15, 16 y 17 muestran el aviso de respaldo.
+- Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
+- Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
+- Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.
