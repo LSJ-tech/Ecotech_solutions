@@ -23,7 +23,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
-- Unidad 3: en desarrollo. Paso 1: configuración segura mediante `.env` y `requirements.txt`. Paso 2: consumo de la API de clima (OpenWeatherMap) con `requests`, validación de entradas, manejo de errores HTTP y de red, y ciudad asociada a cada proyecto. Paso 3: indicadores económicos (mindicador.cl) y cálculo de pagos en moneda extranjera a partir de las horas registradas. Pendiente: caché local de datos externos y pruebas automatizadas.
+- Unidad 3: en desarrollo. Paso 1: configuración segura mediante `.env` y `requirements.txt`. Paso 2: consumo de la API de clima (OpenWeatherMap) con `requests`, validación de entradas, manejo de errores HTTP y de red, y ciudad asociada a cada proyecto. Paso 3: indicadores económicos (mindicador.cl) y cálculo de pagos en moneda extranjera a partir de las horas registradas. Paso 4: persistencia local de clima e indicadores en SQLite, usada como respaldo automático cuando el servicio externo falla. Pendiente: pruebas automatizadas en el repositorio y cierre de la revisión crítica con IA.
 
 ## Requisitos
 
@@ -57,6 +57,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 - Un registro de tiempo pertenece a un empleado y a un proyecto.
 - Un usuario puede estar asociado a un empleado.
 - Un proyecto puede tener una ciudad asociada (Unidad 3), usada para consultar el clima.
+- Las consultas de clima e indicadores se guardan localmente (`consultas_clima`, `indicadores`) como respaldo.
 
 El diagrama original se encuentra en `uml.png`.
 
@@ -221,6 +222,10 @@ Cada proyecto puede tener una ciudad (`proyectos.ciudad`, agregada mediante migr
 
 El cálculo de pagos vive en el núcleo: `sumar_horas_empleado()` totaliza `registros_tiempo` y `calcular_pago()` (en `main.py`) convierte horas × tarifa en CLP y luego a la moneda del indicador, validando que horas, tarifa y tipo de cambio sean positivos. El resultado es un `Pago` inmutable con ambos montos y el valor de cambio usado, de modo que la conversión sea trazable.
 
+### Persistencia local y continuidad
+
+Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, con `fecha_consulta`). `consultar_con_respaldo()` envuelve a cualquier servicio: si la API responde, persiste el dato y lo devuelve; si lanza `ErrorServicioExterno`, busca el último registro guardado para esa ciudad o indicador y lo devuelve marcado como respaldo, junto con el motivo del fallo. Solo si tampoco existe respaldo se propaga el error. La interfaz muestra un aviso con la fecha del dato guardado, de modo que el usuario sabe que no es información en tiempo real. Así, una caída del servicio externo no interrumpe la planificación ni el cálculo de pagos.
+
 ## Validaciones realizadas
 
 - Compilación de `main.py` con `py -3 -m py_compile`.
@@ -245,6 +250,7 @@ El cálculo de pagos vive en el núcleo: `sumar_horas_empleado()` totaliza `regi
 - Pruebas del servicio de clima con respuestas simuladas (`unittest.mock`): 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, cuerpo no JSON y JSON con campos faltantes o fuera de rango; ningún mensaje al usuario contiene la llave.
 - Verificación de la migración de `proyectos.ciudad` sobre una base antigua, del guardado y actualización de la ciudad, del rechazo de ciudades con números o símbolos y de la opción de menú 15.
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; opción 17 restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
+- Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; opciones 15, 16 y 17 muestran el aviso de respaldo.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.

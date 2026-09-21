@@ -17,6 +17,7 @@
 13. Cambio 27 (Unidad 3, paso 1): configuración segura con variables de entorno y dependencias.
 14. Cambio 28 (Unidad 3, paso 2): consumo de la API de clima con `requests`, validación y manejo de errores.
 15. Cambio 29 (Unidad 3, paso 3): indicadores económicos de mindicador.cl y cálculo de pagos en moneda extranjera.
+16. Cambio 30 (Unidad 3, paso 4): persistencia local de datos externos y respaldo ante fallos del servicio.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -810,3 +811,30 @@ También se revisó el borrador del servicio: usaba `datos["serie"][-1]` asumien
 - `calcular_pago()`: 10 horas a $15.000 con dólar a 958,42 produce $150.000 CLP y 156,51 USD; horas cero, tarifa negativa, tipo de cambio cero y un booleano como horas son rechazados.
 - Menú en SQLite en memoria: un empleado sin horas registradas bloquea el cálculo con un mensaje claro; el rol `empleado` recibe `PermissionError`; con tarifa `abc`, `-3` y luego `15000,5` y con indicador `bitcoin` y luego `dolar`, la opción 17 repite solo el campo inválido y muestra `Total: $187,506.25 CLP = 195.64 USD`; la opción 16 está visible para todos y la 17 solo para gestión.
 - Consulta real a mindicador.cl durante la sesión: `Euro: 1099.86 CLP (2026-09-21)`.
+
+## Cambio 30 - Unidad 3, paso 4: persistencia local y respaldo ante fallos
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `servicios_externos.py`, `interfaz.py`
+**Objetivo:** cumplir la parte del aprendizaje esperado que exige "persistir datos localmente" y el criterio 3.1.3 ("estructuras de control que permitan la continuidad y estabilidad del sistema"): el sistema debe seguir siendo útil aunque el servicio externo no responda.
+
+### Implementación
+
+- `SCHEMA_SQL` incorpora `consultas_clima` (ciudad, temperatura, humedad, descripción, fecha de consulta) e `indicadores` (código, nombre, moneda, valor, fecha del dato, fecha de consulta). Se crean con `CREATE TABLE IF NOT EXISTS`, por lo que las bases existentes se actualizan al abrir el programa.
+- En `servicios_externos.py`: `guardar_clima()`, `obtener_ultimo_clima()`, `guardar_indicador()` y `obtener_ultimo_indicador()` usan consultas parametrizadas, el decorador `@revertir_si_falla` del núcleo y devuelven los mismos `Clima` e `Indicador` que entrega la API, de modo que la interfaz no distingue el origen salvo por la bandera de respaldo. La búsqueda de clima es insensible a mayúsculas y ambas ordenan por fecha de consulta descendente para entregar el dato más reciente. Los lectores del respaldo pasan por `validar_ciudad()` y `validar_indicador()`, así la lista blanca aplica también a la base local.
+- `consultar_con_respaldo(connection, servicio, criterio)` devuelve un `ResultadoConsulta` con el dato, la bandera `desde_respaldo` y el motivo del fallo. Flujo: consulta el servicio; si responde, persiste y devuelve; si lanza `ErrorServicioExterno`, busca el respaldo; si existe lo devuelve con el motivo y registra una advertencia en el log; si no existe, propaga el error original. Un servicio sin respaldo configurado se rechaza con `ValueError`.
+- `interfaz.py`: `avisar_respaldo()` imprime `Aviso: <motivo> Se muestra el último dato guardado (consultado <fecha>)`. Las opciones 15, 16 y 17 usan `consultar_con_respaldo()`; `obtener_indicador()` centraliza la lectura del indicador para las opciones 16 y 17.
+
+### Revisión técnica
+
+El borrador propuesto por la IA implementaba la caché con una política de expiración (por ejemplo, reutilizar el dato guardado durante 30 minutos sin consultar la API). Se descartó: el objetivo académico es demostrar continuidad ante fallos, no ahorrar llamadas, y una caché con expiración ocultaría al usuario si el dato es actual o no. Se prefirió consultar siempre el servicio y usar la base solo como respaldo explícito, informando la fecha del dato. También se evaluó guardar el respaldo en un archivo JSON; se descartó porque el proyecto ya tiene SQLite con transacciones y rollback, y agregar un segundo mecanismo de persistencia duplicaría responsabilidades.
+
+Durante las pruebas se detectó que un dato con fecha posterior a la actual era rechazado por `ServicioIndicadores` y, en consecuencia, la consulta caía al respaldo. Se confirmó que ese es el comportamiento deseado (una fecha futura indica una respuesta corrupta) y se corrigieron los datos de prueba, no el código.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py servicios_externos.py` finalizó correctamente.
+- Base en memoria: `inicializar_bd()` crea `consultas_clima` e `indicadores`; sin datos, los lectores devuelven `None`.
+- Con servicio simulado: una consulta exitosa persiste una fila y no se marca como respaldo; ante `ConnectionError` se devuelve el dato guardado con el motivo; ante 503 sin respaldo se propaga `ErrorServicioExterno`; con dos valores guardados del dólar (958,42 y 960,00), un `Timeout` devuelve 960,00; un servicio desconocido produce `ValueError`; `obtener_ultimo_indicador(c, "bitcoin")` es rechazado por la lista blanca.
+- Base en archivo temporal: se guarda un clima, se cierra la conexión, se reabre y ante `Timeout` se recupera el respaldo.
+- Menú: opción 15 con el servicio caído muestra `Aviso: ... Se muestra el último dato guardado (consultado 2026-09-21 13:10)` y el clima; opción 16 muestra el aviso y `960.00`; opción 17 calcula `$100,000.00 CLP = 104.17 USD` sobre el respaldo; sin respaldo el error llega al bucle principal con mensaje limpio.

@@ -83,6 +83,25 @@ CREATE TABLE IF NOT EXISTS registros_tiempo (
 	 FOREIGN KEY (rut_empleado) REFERENCES empleados(rut) ON DELETE CASCADE,
 	 FOREIGN KEY (id_proyecto) REFERENCES proyectos(id_proyecto) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS consultas_clima (
+	 id_consulta INTEGER PRIMARY KEY AUTOINCREMENT,
+	 ciudad TEXT NOT NULL,
+	 temperatura REAL NOT NULL,
+	 humedad INTEGER NOT NULL,
+	 descripcion TEXT NOT NULL,
+	 fecha_consulta TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS indicadores (
+	 id_indicador INTEGER PRIMARY KEY AUTOINCREMENT,
+	 codigo TEXT NOT NULL,
+	 nombre TEXT NOT NULL,
+	 moneda TEXT NOT NULL,
+	 valor REAL NOT NULL,
+	 fecha TEXT NOT NULL,
+	 fecha_consulta TEXT NOT NULL
+);
 """
 
 

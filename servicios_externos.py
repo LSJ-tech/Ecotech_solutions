@@ -5,14 +5,17 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Generic, TypeVar
 import logging
 import os
 import re
+import sqlite3
 
 import requests
 
-from main import validar_texto
+from main import revertir_si_falla, validar_texto
+
+T = TypeVar("T")
 
 
 TIMEOUT_SEGUNDOS = 8
@@ -240,9 +243,146 @@ class ServicioIndicadores(IServicioExterno):
 		)
 
 
+@revertir_si_falla
+def guardar_clima(connection: sqlite3.Connection, clima: Clima) -> int:
+	"""Persiste una consulta de clima para usarla como respaldo local."""
+
+	cursor = connection.execute(
+		"""
+		INSERT INTO consultas_clima
+		(ciudad, temperatura, humedad, descripcion, fecha_consulta)
+		VALUES (?, ?, ?, ?, ?)
+		""",
+		(
+			clima.ciudad,
+			clima.temperatura,
+			clima.humedad,
+			clima.descripcion,
+			clima.fecha_consulta.isoformat(timespec="seconds"),
+		),
+	)
+	connection.commit()
+	return int(cursor.lastrowid)
+
+
+def obtener_ultimo_clima(connection: sqlite3.Connection, ciudad: str) -> Clima | None:
+	"""Devuelve la consulta de clima más reciente guardada para una ciudad."""
+
+	fila = connection.execute(
+		"""
+		SELECT ciudad, temperatura, humedad, descripcion, fecha_consulta
+		FROM consultas_clima
+		WHERE lower(ciudad) = lower(?)
+		ORDER BY fecha_consulta DESC, id_consulta DESC
+		LIMIT 1
+		""",
+		(validar_ciudad(ciudad),),
+	).fetchone()
+	if fila is None:
+		return None
+	return Clima(
+		ciudad=fila["ciudad"],
+		temperatura=float(fila["temperatura"]),
+		humedad=int(fila["humedad"]),
+		descripcion=fila["descripcion"],
+		fecha_consulta=datetime.fromisoformat(fila["fecha_consulta"]),
+	)
+
+
+@revertir_si_falla
+def guardar_indicador(connection: sqlite3.Connection, indicador: Indicador) -> int:
+	"""Persiste el valor de un indicador para usarlo como respaldo local."""
+
+	cursor = connection.execute(
+		"""
+		INSERT INTO indicadores
+		(codigo, nombre, moneda, valor, fecha, fecha_consulta)
+		VALUES (?, ?, ?, ?, ?, ?)
+		""",
+		(
+			indicador.codigo,
+			indicador.nombre,
+			indicador.moneda,
+			indicador.valor,
+			indicador.fecha.isoformat(),
+			indicador.fecha_consulta.isoformat(timespec="seconds"),
+		),
+	)
+	connection.commit()
+	return int(cursor.lastrowid)
+
+
+def obtener_ultimo_indicador(
+	connection: sqlite3.Connection, codigo: str
+) -> Indicador | None:
+	"""Devuelve el valor más reciente guardado para un indicador."""
+
+	fila = connection.execute(
+		"""
+		SELECT codigo, nombre, moneda, valor, fecha, fecha_consulta
+		FROM indicadores
+		WHERE codigo = ?
+		ORDER BY fecha_consulta DESC, id_indicador DESC
+		LIMIT 1
+		""",
+		(validar_indicador(codigo),),
+	).fetchone()
+	if fila is None:
+		return None
+	return Indicador(
+		codigo=fila["codigo"],
+		nombre=fila["nombre"],
+		moneda=fila["moneda"],
+		valor=float(fila["valor"]),
+		fecha=date.fromisoformat(fila["fecha"]),
+		fecha_consulta=datetime.fromisoformat(fila["fecha_consulta"]),
+	)
+
+
+@dataclass(frozen=True)
+class ResultadoConsulta(Generic[T]):
+	"""Dato obtenido de un servicio externo o, si falló, del respaldo local."""
+
+	dato: T
+	desde_respaldo: bool
+	motivo: str | None = None
+
+
+def consultar_con_respaldo(
+	connection: sqlite3.Connection,
+	servicio: IServicioExterno,
+	criterio: str,
+) -> ResultadoConsulta[Any]:
+	"""Consulta el servicio; si falla, entrega el último dato guardado o propaga el error."""
+
+	if isinstance(servicio, ServicioClima):
+		guardar, obtener = guardar_clima, obtener_ultimo_clima
+	elif isinstance(servicio, ServicioIndicadores):
+		guardar, obtener = guardar_indicador, obtener_ultimo_indicador
+	else:
+		raise ValueError("El servicio indicado no tiene respaldo local configurado.")
+
+	try:
+		dato = servicio.consultar(criterio)
+	except ErrorServicioExterno as error:
+		respaldo = obtener(connection, criterio)
+		if respaldo is None:
+			raise
+		LOGGER.warning("Usando respaldo local para %r: %s", criterio, error)
+		return ResultadoConsulta(respaldo, True, str(error))
+	guardar(connection, dato)
+	return ResultadoConsulta(dato, False)
+
+
 __all__ = [
 	"INDICADORES_PERMITIDOS",
 	"Clima",
+	"ResultadoConsulta",
+	"consultar_con_respaldo",
+	"guardar_clima",
+	"guardar_indicador",
+	"obtener_ultimo_clima",
+	"obtener_ultimo_indicador",
 	"ClienteHTTP",
 	"ErrorServicioExterno",
 	"IServicioExterno",

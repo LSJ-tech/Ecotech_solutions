@@ -46,8 +46,10 @@ from main import (
 from servicios_externos import (
 	INDICADORES_PERMITIDOS,
 	ErrorServicioExterno,
+	ResultadoConsulta,
 	ServicioClima,
 	ServicioIndicadores,
+	consultar_con_respaldo,
 	validar_ciudad,
 	validar_indicador,
 )
@@ -266,6 +268,16 @@ def leer_ciudad_opcional(
 			print(error)
 
 
+def avisar_respaldo(resultado: ResultadoConsulta) -> None:
+	"""Informa cuando el dato proviene del respaldo local y no del servicio."""
+
+	if resultado.desde_respaldo:
+		print(
+			f"Aviso: {resultado.motivo} Se muestra el último dato guardado "
+			f"(consultado {resultado.dato.fecha_consulta:%Y-%m-%d %H:%M})."
+		)
+
+
 def consultar_clima_menu(connection: sqlite3.Connection) -> None:
 	"""Consulta el clima actual de la ciudad de un proyecto."""
 
@@ -278,7 +290,9 @@ def consultar_clima_menu(connection: sqlite3.Connection) -> None:
 		raise ValueError("El proyecto indicado no existe.")
 	if not fila["ciudad"]:
 		raise ValueError("El proyecto no tiene una ciudad asignada.")
-	clima = ServicioClima().consultar(fila["ciudad"])
+	resultado = consultar_con_respaldo(connection, ServicioClima(), fila["ciudad"])
+	avisar_respaldo(resultado)
+	clima = resultado.dato
 	print(
 		f"Clima en {clima.ciudad} para el proyecto {fila['nombre']}: "
 		f"{clima.temperatura:.1f} °C, humedad {clima.humedad}%, {clima.descripcion} "
@@ -310,10 +324,18 @@ def leer_monto(mensaje: str, campo: str) -> float:
 			print(f"{campo} debe ser un número mayor que 0.")
 
 
-def consultar_indicador_menu() -> None:
+def obtener_indicador(connection: sqlite3.Connection) -> ResultadoConsulta:
+	"""Solicita un indicador y lo consulta con respaldo local."""
+
+	return consultar_con_respaldo(connection, ServicioIndicadores(), leer_indicador())
+
+
+def consultar_indicador_menu(connection: sqlite3.Connection) -> None:
 	"""Muestra el valor vigente de un indicador económico."""
 
-	indicador = ServicioIndicadores().consultar(leer_indicador())
+	resultado = obtener_indicador(connection)
+	avisar_respaldo(resultado)
+	indicador = resultado.dato
 	print(
 		f"{indicador.nombre}: ${indicador.valor:,.2f} CLP por {indicador.moneda} "
 		f"(valor del {indicador.fecha:%Y-%m-%d}, consultado "
@@ -331,7 +353,9 @@ def calcular_pago_menu(connection: sqlite3.Connection, usuario_actual: Usuario) 
 	if horas <= 0:
 		raise ValueError("El empleado no tiene horas registradas para calcular un pago.")
 	tarifa = leer_monto("Tarifa por hora en CLP: ", "La tarifa por hora")
-	indicador = ServicioIndicadores().consultar(leer_indicador())
+	resultado = obtener_indicador(connection)
+	avisar_respaldo(resultado)
+	indicador = resultado.dato
 	pago = calcular_pago(rut, horas, tarifa, indicador.moneda, indicador.valor)
 	print(
 		f"Horas registradas: {pago.horas:g} | Tarifa: ${pago.tarifa_hora_clp:,.2f} CLP\n"
@@ -809,7 +833,7 @@ def ejecutar_opcion_menu(
 		"13": lambda: cambiar_rol_menu(connection, usuario_actual),
 		"14": lambda: eliminar_usuario_admin_menu(connection, usuario_actual),
 		"15": lambda: consultar_clima_menu(connection),
-		"16": consultar_indicador_menu,
+		"16": lambda: consultar_indicador_menu(connection),
 		"17": lambda: calcular_pago_menu(connection, usuario_actual),
 	}
 	if opcion == "0":
