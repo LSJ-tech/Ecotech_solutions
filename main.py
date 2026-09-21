@@ -30,6 +30,7 @@ VARIABLES_CODIGO_ROL = {
 }
 ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
+CODIFICACION = "utf-8"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS departamentos (
@@ -159,7 +160,7 @@ def obtener_codigo_rol(rol: str) -> str:
 def verificar_codigo_rol(rol: str, codigo: str) -> bool:
 	"""Compara el código ingresado en tiempo constante para evitar fugas por tiempo."""
 
-	return hmac.compare_digest(codigo.encode("utf-8"), obtener_codigo_rol(rol).encode("utf-8"))
+	return hmac.compare_digest(codigo.encode(CODIFICACION), obtener_codigo_rol(rol).encode(CODIFICACION))
 
 
 def validar_ciudad_opcional(valor: str | None) -> str | None:
@@ -240,7 +241,7 @@ def generar_hash_contrasena(contrasena: str) -> str:
 	contrasena = validar_texto(contrasena, "La contraseña")
 	sal = secrets.token_bytes(16)
 	hash_contrasena = hashlib.pbkdf2_hmac(
-		"sha256", contrasena.encode("utf-8"), sal, 120_000
+		"sha256", contrasena.encode(CODIFICACION), sal, 120_000
 	)
 	return f"pbkdf2_sha256$120000${sal.hex()}${hash_contrasena.hex()}"
 
@@ -254,7 +255,7 @@ def verificar_contrasena(contrasena: str, almacenada: str) -> bool:
 		_algoritmo, iteraciones, sal_hex, hash_hex = almacenada.split("$", 3)
 		hash_calculado = hashlib.pbkdf2_hmac(
 			"sha256",
-			contrasena.encode("utf-8"),
+			contrasena.encode(CODIFICACION),
 			bytes.fromhex(sal_hex),
 			int(iteraciones),
 		)

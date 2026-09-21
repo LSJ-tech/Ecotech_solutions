@@ -194,7 +194,7 @@ class ServicioClima(IServicioExterno):
 			temperatura=temperatura,
 			humedad=humedad,
 			descripcion=descripcion,
-			fecha_consulta=datetime.now(),
+			fecha_consulta=datetime.now().astimezone(),
 		)
 
 
@@ -243,7 +243,7 @@ class ServicioIndicadores(IServicioExterno):
 			moneda=INDICADORES_PERMITIDOS[codigo],
 			valor=valor,
 			fecha=fecha,
-			fecha_consulta=datetime.now(),
+			fecha_consulta=datetime.now().astimezone(),
 		)
 
 

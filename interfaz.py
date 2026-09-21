@@ -59,6 +59,7 @@ MENSAJE_CONTRASENA = "Contrasena: "
 MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
 MENSAJE_OPCION_INVALIDA = "Opcion no valida."
 MENSAJE_SELECCION = "Seleccione una opcion: "
+MENSAJE_ID_PROYECTO = "ID del proyecto: "
 ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = (
 	"SELECT rut, nombre, apellido, correo, cargo "
@@ -283,7 +284,7 @@ def consultar_clima_menu(connection: sqlite3.Connection) -> None:
 	"""Consulta el clima actual de la ciudad de un proyecto."""
 
 	mostrar_proyectos(connection)
-	id_proyecto = leer_entero("ID del proyecto: ")
+	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
 	fila = connection.execute(
 		"SELECT nombre, ciudad FROM proyectos WHERE id_proyecto = ?", (id_proyecto,)
 	).fetchone()
@@ -689,7 +690,7 @@ def asignar_proyecto_menu(
 	mostrar_empleados(connection)
 	rut = validar_rut(input("RUT del empleado: "))
 	mostrar_proyectos(connection)
-	id_proyecto = leer_entero("ID del proyecto: ")
+	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
 	asignar_empleado_proyecto_bd(connection, rut, id_proyecto)
 	print("Empleado asignado al proyecto.")
 
@@ -705,7 +706,7 @@ def registrar_tiempo_menu(
 	else:
 		rut = obtener_rut_propio(usuario_actual)
 	mostrar_proyectos(connection)
-	id_proyecto = leer_entero("ID del proyecto: ")
+	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
 	fecha = leer_fecha("Fecha (YYYY-MM-DD): ")
 	horas = leer_horas()
 	empleado_row = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()

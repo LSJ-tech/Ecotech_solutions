@@ -20,6 +20,7 @@
 16. Cambio 30 (Unidad 3, paso 4): persistencia local de datos externos y respaldo ante fallos del servicio.
 17. Cambio 31: menú principal definido en una sola tabla y renumerado de forma consecutiva.
 18. Cambio 32 (Unidad 3, paso 5): revisión de seguridad final, pruebas automatizadas y cierre de la unidad.
+19. Cambio 33: avisos de mantenibilidad SonarQube tras la Unidad 3.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -906,3 +907,30 @@ Se recorrió `servicios_externos.py`, `main.py` e `interfaz.py` con una lista de
 - `py -3 -m unittest -v test_servicios_externos`: 27 pruebas, todas en verde, en menos de 0,1 s.
 - `py -3 -m py_compile servicios_externos.py test_servicios_externos.py` finalizó correctamente.
 - El guion privado `defensa_oral.py` se actualizó con dos secciones sobre la Unidad 3 y tres preguntas probables; no forma parte del repositorio.
+
+## Cambio 33 - Avisos de mantenibilidad SonarQube tras la Unidad 3
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `servicios_externos.py`, `test_servicios_externos.py`
+**Objetivo:** eliminar los ocho avisos de mantenibilidad reportados por SonarQube después de incorporar el código de la Unidad 3.
+
+### Hallazgos y correcciones
+
+| Regla | Ubicación | Corrección |
+|---|---|---|
+| S1192 literal `"utf-8"` repetido cuatro veces | `main.py` | Constante `CODIFICACION` usada en el hash de contraseñas y en la comparación de códigos de rol. |
+| S1192 literal `"ID del proyecto: "` repetido tres veces | `interfaz.py` | Constante `MENSAJE_ID_PROYECTO`, en línea con las demás constantes de mensajes. |
+| S6903 `datetime.now()` sin zona horaria (dos usos) | `servicios_externos.py` | `datetime.now().astimezone()`: fecha de consulta consciente de la zona local; `fromisoformat` la recupera con su desplazamiento desde SQLite. |
+| S1172 parámetro `params` sin uso en el `get` simulado | `test_servicios_externos.py` | Se convirtió en una verificación: los parámetros deben viajar en `params=`, nunca concatenados en la URL. |
+| `assert` en una función auxiliar (dos usos) | `test_servicios_externos.py` | Reemplazados por `raise AssertionError(...)` explícitos en `verificar_peticion()`. |
+| S3776 complejidad cognitiva de `sesion_simulada` (16) | `test_servicios_externos.py` | Dividida en `verificar_peticion()`, `respuesta_simulada()` y una `sesion_simulada()` más corta. |
+
+### Revisión técnica
+
+Se descartó silenciar reglas con comentarios `# NOSONAR`: cada aviso tenía una corrección directa y el objetivo del proyecto es demostrar criterio técnico, no ocultar avisos. La regla S1192 de SonarQube para Python no cuenta cadenas formadas solo por letras, dígitos y guion bajo (por ejemplo, claves de columnas como `'rut_empleado'`), por lo que esas no se convirtieron en constantes; hacerlo empeoraría la legibilidad sin beneficio.
+
+### Validación
+
+- `py -3 -m py_compile` de los cuatro archivos finalizó correctamente.
+- `py -3 -m unittest test_servicios_externos`: 27 pruebas en verde después de la refactorización del mock.
+- Recorrido del AST sin literales repetidos (según los criterios de S1192), sin imports ni parámetros sin uso y sin funciones sobre 15 de complejidad cognitiva.

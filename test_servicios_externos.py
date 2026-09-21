@@ -30,31 +30,45 @@ RESPUESTA_DOLAR = {
 LLAVE_PRUEBA = "llave-de-prueba"
 
 
+def verificar_peticion(url, params, timeout):
+	"""Comprueba las garantías que toda petición del cliente debe cumplir."""
+
+	if not url.startswith("https://"):
+		raise AssertionError("toda petición debe usar HTTPS")
+	if timeout != se.TIMEOUT_SEGUNDOS:
+		raise AssertionError("toda petición debe llevar timeout")
+	if params is None:
+		raise AssertionError("los parámetros deben viajar en params=")
+
+
+def respuesta_simulada(estado, cuerpo, tamano):
+	"""Construye una respuesta falsa de requests con el estado y cuerpo indicados."""
+
+	respuesta = MagicMock()
+	respuesta.status_code = estado
+	respuesta.content = b"x" * tamano
+	if cuerpo is ValueError:
+		respuesta.json.side_effect = ValueError("no es JSON")
+	else:
+		respuesta.json.return_value = cuerpo
+	return respuesta
+
+
 def sesion_simulada(status=200, json=None, exc=None, secuencia=None, tamano=100):
 	"""Crea una sesión falsa de requests que responde según los parámetros."""
 
 	sesion = MagicMock()
 
 	def get(url, params=None, timeout=None):
-		assert url.startswith("https://"), "toda petición debe usar HTTPS"
-		assert timeout == se.TIMEOUT_SEGUNDOS, "toda petición debe llevar timeout"
+		verificar_peticion(url, params, timeout)
 		if secuencia:
 			item = secuencia.pop(0)
 			if isinstance(item, Exception):
 				raise item
-			estado, cuerpo = item
-		else:
-			if exc:
-				raise exc
-			estado, cuerpo = status, json
-		respuesta = MagicMock()
-		respuesta.status_code = estado
-		respuesta.content = b"x" * tamano
-		if cuerpo is ValueError:
-			respuesta.json.side_effect = ValueError("no es JSON")
-		else:
-			respuesta.json.return_value = cuerpo
-		return respuesta
+			return respuesta_simulada(*item, tamano)
+		if exc:
+			raise exc
+		return respuesta_simulada(status, json, tamano)
 
 	sesion.get.side_effect = get
 	return sesion

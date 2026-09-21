@@ -22,7 +22,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Arquitectura: núcleo de dominio y persistencia en `main.py`; servicios externos en `servicios_externos.py`; interfaz de consola en `interfaz.py`.
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
-- Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
+- Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso, complejidad cognitiva y fechas con zona horaria; sin avisos de mantenibilidad SonarQube en los módulos ni en las pruebas.
 - Unidad 3: criterios 3.1.1 a 3.1.4 implementados y validados. Consumo de OpenWeatherMap (clima por proyecto) y mindicador.cl (dólar, euro, UF) con `requests`; secretos en `.env`; validación de entradas y de respuestas; manejo de errores HTTP y de red con mensajes sin datos sensibles; respaldo local en SQLite; cálculo de pagos en moneda extranjera; 27 pruebas automatizadas sin red en `test_servicios_externos.py`.
 
 ## Requisitos
@@ -293,6 +293,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
 - Suite `test_servicios_externos.py` (27 pruebas, `unittest`, sin red) en verde; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.
