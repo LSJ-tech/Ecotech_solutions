@@ -19,6 +19,7 @@
 15. Cambio 29 (Unidad 3, paso 3): indicadores económicos de mindicador.cl y cálculo de pagos en moneda extranjera.
 16. Cambio 30 (Unidad 3, paso 4): persistencia local de datos externos y respaldo ante fallos del servicio.
 17. Cambio 31: menú principal definido en una sola tabla y renumerado de forma consecutiva.
+18. Cambio 32 (Unidad 3, paso 5): revisión de seguridad final, pruebas automatizadas y cierre de la unidad.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -866,3 +867,42 @@ Se evaluó ordenar la lista existente con `sorted(..., key=int)` como arreglo m�
 - `py -3 -m py_compile interfaz.py` finalizó correctamente.
 - Para `admin`, `rrhh` y `empleado` los números del menú son estrictamente crecientes: `admin` 1-16, `rrhh` 1-14, `empleado` 2, 3, 5, 7, 8, 9, 10, 11.
 - Para `empleado`, la opción `16` (eliminar usuario) responde `Opcion no valida.` sin ejecutar nada; la opción `0` finaliza la sesión; la opción `2` ejecuta el listado de departamentos.
+
+## Cambio 32 - Unidad 3, paso 5: revisión de seguridad final y pruebas automatizadas
+
+**Fecha:** 2026-09-21
+**Archivo creado:** `test_servicios_externos.py`
+**Archivo modificado:** `servicios_externos.py`
+**Objetivo:** cerrar el criterio 3.1.4 con una revisión de seguridad del código de la Unidad 3 apoyada por IA, dejar las pruebas como parte del repositorio y verificar la integración real con ambas APIs.
+
+### Revisión de seguridad (con apoyo de IA)
+
+Se recorrió `servicios_externos.py`, `main.py` e `interfaz.py` con una lista de verificación propuesta por la IA y revisada por el equipo. Resultado por punto:
+
+| Punto revisado | Resultado | Decisión |
+|---|---|---|
+| Secretos en el código fuente | Ninguno; llave y códigos en `.env`, cargados con `python-dotenv`. | Sin cambios. |
+| Llave en URL, mensajes o logs | La llave viaja solo en `params`; los logs registran la URL base sin query; los mensajes son fijos. | Sin cambios; se agregó una prueba que lo verifica. |
+| Verificación TLS | `requests` verifica certificados por defecto; `ClienteHTTP` rechaza URLs sin `https://`. | Sin cambios. |
+| Timeout y reintentos | Timeout de 8 s en toda petición; un reintento solo ante timeout o 5xx. | Sin cambios. |
+| Validación de entradas | Ciudad por expresión regular, indicador por lista blanca, montos positivos, RUT con dígito verificador. | Sin cambios. |
+| Validación de respuestas | Esquema, tipos y rangos comprobados; 200 con contenido inesperado se rechaza. | Sin cambios. |
+| Tamaño de la respuesta | **Hallazgo:** `respuesta.json()` se ejecutaba sin límite; un servicio comprometido podría devolver un cuerpo enorme y agotar memoria. | **Corregido:** `MAX_BYTES_RESPUESTA = 1_000_000`; se rechaza el cuerpo mayor con el mensaje genérico de formato y se registra en el log. |
+| Aritmética monetaria | `float` con redondeo a dos decimales. | **Limitación aceptada** para el alcance académico; en una nómina real se usaría `decimal.Decimal`. Se documenta para la defensa. |
+| Espera entre reintentos | Reintento inmediato, sin espera exponencial. | Aceptado: un solo reintento no genera carga significativa. |
+| Contenido del log local | Incluye URL base, código HTTP y ciudad consultada; nunca llaves ni credenciales. | Aceptado; `*.log` excluido del repositorio. |
+
+### Pruebas automatizadas
+
+`test_servicios_externos.py` contiene 27 pruebas con `unittest` y `unittest.mock`, sin acceso a la red, organizadas en seis clases: validación de entradas, `ClienteHTTP` (cada código de error, timeout, sin conexión, cuerpo no JSON, respuesta demasiado grande, reintento exitoso), `ServicioClima`, `ServicioIndicadores`, cálculo de pagos y respaldo local. La sesión simulada verifica en cada llamada que la URL use HTTPS y que se pase el timeout; el ayudante `assert_error` verifica que ningún mensaje contenga la llave ni `appid`. El registro del módulo se desactiva durante las pruebas porque provocan fallos a propósito.
+
+### Verificación en vivo
+
+- La llave de OpenWeatherMap, que respondía 401 al crearse (cambio 28), quedó activa durante la sesión: `Santiago: 16.98 °C, humedad 63%, nubes`.
+- mindicador.cl respondió correctamente para `euro` (cambio 29).
+
+### Validación
+
+- `py -3 -m unittest -v test_servicios_externos`: 27 pruebas, todas en verde, en menos de 0,1 s.
+- `py -3 -m py_compile servicios_externos.py test_servicios_externos.py` finalizó correctamente.
+- El guion privado `defensa_oral.py` se actualizó con dos secciones sobre la Unidad 3 y tres preguntas probables; no forma parte del repositorio.

@@ -23,7 +23,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
-- Unidad 3: en desarrollo. Paso 1: configuración segura mediante `.env` y `requirements.txt`. Paso 2: consumo de la API de clima (OpenWeatherMap) con `requests`, validación de entradas, manejo de errores HTTP y de red, y ciudad asociada a cada proyecto. Paso 3: indicadores económicos (mindicador.cl) y cálculo de pagos en moneda extranjera a partir de las horas registradas. Paso 4: persistencia local de clima e indicadores en SQLite, usada como respaldo automático cuando el servicio externo falla. Pendiente: pruebas automatizadas en el repositorio y cierre de la revisión crítica con IA.
+- Unidad 3: criterios 3.1.1 a 3.1.4 implementados y validados. Consumo de OpenWeatherMap (clima por proyecto) y mindicador.cl (dólar, euro, UF) con `requests`; secretos en `.env`; validación de entradas y de respuestas; manejo de errores HTTP y de red con mensajes sin datos sensibles; respaldo local en SQLite; cálculo de pagos en moneda extranjera; 27 pruebas automatizadas sin red en `test_servicios_externos.py`.
 
 ## Requisitos
 
@@ -38,6 +38,7 @@ Ecotech_solutions/
 ├── main.py
 ├── servicios_externos.py
 ├── interfaz.py
+├── test_servicios_externos.py
 ├── requirements.txt
 ├── .env.example
 ├── Readme.md
@@ -136,6 +137,23 @@ La revisión detectó que algunas operaciones de actualización SQLite podían s
 Además, se reforzó la seguridad del modelo de usuario: la propiedad `contrasena` ya no expone el valor real en texto plano, y el acceso interno se controla mediante `obtener_contrasena_interna()` y `verificar_contrasena()`. Esto evita fugas de credenciales por lectura directa del objeto y mantiene el flujo de autenticación y persistencia bajo validación explícita.
 
 La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los hallazgos, las decisiones técnicas y la validación de cada mejora.
+
+## Estado de los criterios de la Unidad 3
+
+| Criterio | Evidencia |
+|---|---|
+| 3.1.1 Consumo de servicios externos con librerías oficiales | `ServicioClima` (OpenWeatherMap) y `ServicioIndicadores` (mindicador.cl) sobre `requests.Session`; respuestas JSON procesadas y validadas; datos usados en el menú (opciones 10, 11 y 12). |
+| 3.1.2 Autenticación y validación de entradas | Login con PBKDF2 y roles; códigos de rol y llave de API en `.env`; `validar_ciudad()`, lista blanca de indicadores, `validar_monto()`; opciones filtradas por rol y verificadas al ejecutar. |
+| 3.1.3 Manejo de errores en servicios externos | `ClienteHTTP` traduce 401/403, 404, 429, 5xx, timeout, sin conexión, cuerpo no JSON y respuestas de más de 1 MB a `ErrorServicioExterno` con mensajes sin URL ni llave; reintento ante 5xx/timeout; respaldo local con aviso; el menú nunca se interrumpe. |
+| 3.1.4 Ajuste de seguridad con apoyo de IA | Cambios 27 a 32 de `VALIDACION_IA.md`: propuestas de IA evaluadas, modificadas o descartadas con justificación (exposición de la llave en mensajes, falta de timeout, uso sin validar de la respuesta, orden de la serie, caché con expiración, tamaño de respuesta). |
+
+## Pruebas automatizadas
+
+```powershell
+py -3 -m unittest -v test_servicios_externos
+```
+
+Las 27 pruebas se ejecutan sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API.
 
 ## Ejecución
 
@@ -274,6 +292,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
+- Suite `test_servicios_externos.py` (27 pruebas, `unittest`, sin red) en verde; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.

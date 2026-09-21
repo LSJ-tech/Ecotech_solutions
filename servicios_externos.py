@@ -20,6 +20,7 @@ T = TypeVar("T")
 
 TIMEOUT_SEGUNDOS = 8
 REINTENTOS_SERVIDOR = 1
+MAX_BYTES_RESPUESTA = 1_000_000
 MENSAJE_RESPUESTA_INVALIDA = "La respuesta del servicio externo no tiene el formato esperado."
 PATRON_CIUDAD = re.compile(r"[A-Za-zÁÉÍÓÚÑáéíóúñü' -]{2,60}")
 # Indicadores de mindicador.cl permitidos y la moneda que representan.
@@ -120,6 +121,9 @@ class ClienteHTTP:
 		if codigo != 200:
 			LOGGER.error("HTTP %s inesperado en %s", codigo, url)
 			raise ErrorServicioExterno("El servicio externo devolvió una respuesta inesperada.")
+		if len(respuesta.content) > MAX_BYTES_RESPUESTA:
+			LOGGER.error("Respuesta demasiado grande en %s", url)
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
 		try:
 			datos = respuesta.json()
 		except ValueError as error:
