@@ -21,7 +21,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Unidad 2: criterios 2.1.1 a 2.1.5 implementados y validados.
 - Arquitectura: núcleo de dominio y persistencia en `main.py`; interfaz de consola en `interfaz.py`.
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
-- Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados.
+- Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos y complejidad cognitiva.
 - Unidad 3: pendiente de implementar el consumo seguro de una API externa, autenticación del servicio, validación de respuestas, manejo de errores HTTP y persistencia de datos externos.
 
@@ -145,8 +145,8 @@ La interfaz de consola se encuentra separada exclusivamente en `interfaz.py`. El
 Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tablas y muestra un menú para:
 
 - Crear y listar departamentos, empleados y proyectos.
-- Asignar empleados a proyectos.
-- Registrar horas trabajadas.
+- Asignar empleados a proyectos (solo `admin` y `rrhh`).
+- Registrar horas trabajadas (los empleados solo las propias).
 - Consultar registros de tiempo.
 - Crear y listar usuarios asociados a empleados.
 - Solicitar login antes de entrar al menú principal.
@@ -167,7 +167,7 @@ La interfaz centraliza mensajes y consultas reutilizadas, y separa el flujo de i
 
 Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh` requiere la clave temporal `12345`, tiene permisos de gestión salvo cambiar roles y debe estar asociado a un empleado. El rol `admin` requiere el código `1234`; cambiar roles y eliminar usuarios son acciones exclusivas de `admin`.
 
-Los empleados solo pueden consultar sus propias horas registradas y generar su propio reporte. `admin` y `rrhh` pueden consultar los registros generales.
+Los empleados solo pueden consultar sus propias horas registradas, registrar horas a su propio nombre y generar su propio reporte. `admin` y `rrhh` pueden crear proyectos, asignar empleados a proyectos, registrar horas de cualquier empleado y consultar los registros generales. Las verificaciones de permiso se aplican tanto al mostrar el menú como al ejecutar la opción, por lo que escribir un número oculto no permite saltarse la restricción.
 
 La opción `Gestionar departamentos` permite crear departamentos y, mediante un submenú, asignar o cambiar el departamento de un empleado. Esta opción está disponible para `admin` y `rrhh`.
 
@@ -203,6 +203,7 @@ Base de datos conectada: ecotech_solutions.db
 - Verificación de menús diferenciados para `admin`, `rrhh` y `empleado`.
 - Verificación de generación automática de usuarios y uso del segundo apellido ante duplicidad.
 - Verificación de que eliminar un usuario elimina su empleado y asignación asociada, sin eliminar el proyecto.
+- Verificación de que un empleado solo ve sus propios registros en `Ver mis horas registradas` y no puede crear proyectos, asignar personas ni registrar horas a nombre de otro RUT.
 - Limpieza de `ecotech_solutions.db`, conservando el esquema y dejando sus tablas vacías.
 
 ## Registro de cambios y uso de IA

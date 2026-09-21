@@ -206,6 +206,29 @@ def generar_nombre_usuario(
 	raise ValueError("Ya existen usuarios con ambos apellidos. Use otro nombre o apellido.")
 
 
+def verificar_gestion(usuario_actual: Usuario, accion: str) -> None:
+	"""Lanza PermissionError si el rol actual no puede ejecutar la acción."""
+
+	if usuario_actual.rol not in ROLES_GESTION:
+		raise PermissionError(f"Solo admin o rrhh pueden {accion}.")
+
+
+def obtener_rut_propio(usuario_actual: Usuario) -> str:
+	"""Devuelve el RUT del empleado vinculado al usuario o falla si no existe."""
+
+	if usuario_actual.empleado is None:
+		raise ValueError("Su cuenta no está asociada a un empleado.")
+	return usuario_actual.empleado.rut
+
+
+def obtener_filtro_rut(usuario_actual: Usuario) -> str | None:
+	"""Devuelve None para roles de gestión y el RUT propio para empleados."""
+
+	if usuario_actual.rol in ROLES_GESTION:
+		return None
+	return obtener_rut_propio(usuario_actual)
+
+
 def leer_horas() -> float:
 	"""Solicita una cantidad de horas valida."""
 
@@ -536,9 +559,12 @@ def gestionar_departamentos_menu(
 		print("Opcion no valida.")
 
 
-def crear_proyecto_menu(connection: sqlite3.Connection) -> None:
+def crear_proyecto_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
 	"""Crea un proyecto desde el menu."""
 
+	verificar_gestion(usuario_actual, "crear proyectos")
 	fecha_inicio = leer_fecha("Fecha de inicio (YYYY-MM-DD): ")
 	fecha_fin = leer_fecha("Fecha de fin (YYYY-MM-DD, Enter si sigue en curso): ", True)
 	proyecto = Proyecto(
@@ -551,9 +577,12 @@ def crear_proyecto_menu(connection: sqlite3.Connection) -> None:
 	print(f"Proyecto creado con ID {guardar_proyecto(connection, proyecto)}.")
 
 
-def asignar_proyecto_menu(connection: sqlite3.Connection) -> None:
+def asignar_proyecto_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
 	"""Asigna un empleado a un proyecto y persiste la relacion."""
 
+	verificar_gestion(usuario_actual, "asignar empleados a proyectos")
 	mostrar_empleados(connection)
 	rut = validar_rut(input("RUT del empleado: "))
 	mostrar_proyectos(connection)
@@ -562,11 +591,16 @@ def asignar_proyecto_menu(connection: sqlite3.Connection) -> None:
 	print("Empleado asignado al proyecto.")
 
 
-def registrar_tiempo_menu(connection: sqlite3.Connection) -> None:
-	"""Registra horas trabajadas desde el menu."""
+def registrar_tiempo_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Registra horas trabajadas; los empleados solo pueden registrar las propias."""
 
-	mostrar_empleados(connection)
-	rut = validar_rut(input("RUT del empleado: "))
+	if usuario_actual.rol in ROLES_GESTION:
+		mostrar_empleados(connection)
+		rut = validar_rut(input("RUT del empleado: "))
+	else:
+		rut = obtener_rut_propio(usuario_actual)
 	mostrar_proyectos(connection)
 	id_proyecto = leer_entero("ID del proyecto: ")
 	fecha = leer_fecha("Fecha (YYYY-MM-DD): ")
@@ -601,12 +635,7 @@ def mostrar_reportes_menu(
 ) -> None:
 	"""Genera el reporte seleccionado con los registros de SQLite."""
 
-	rut_empleado = (
-		None
-		if usuario_actual.rol in ROLES_GESTION
-		else usuario_actual.empleado.rut if usuario_actual.empleado else ""
-	)
-	filas = listar_registros_tiempo(connection, rut_empleado)
+	filas = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
 	if not filas:
 		print("No hay registros de tiempo para reportar.")
 		return
@@ -668,11 +697,21 @@ def eliminar_usuario_admin_menu(
 	print("Usuario eliminado correctamente.")
 
 
-def mostrar_registros_tiempo_menu(connection: sqlite3.Connection) -> None:
-	"""Muestra los registros de tiempo almacenados."""
+def mostrar_registros_tiempo_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Muestra los registros de tiempo permitidos para el rol actual."""
 
-	for registro in listar_registros_tiempo(connection):
-		print(dict(registro))
+	registros = listar_registros_tiempo(connection, obtener_filtro_rut(usuario_actual))
+	if not registros:
+		print("No hay registros de tiempo.")
+		return
+	for registro in registros:
+		print(
+			f"{registro['id_registro']}: {registro['fecha']} | "
+			f"{registro['empleado']} ({registro['rut_empleado']}) | "
+			f"{registro['proyecto']} | {registro['horas']} horas"
+		)
 
 
 def ejecutar_opcion_menu(
@@ -684,11 +723,11 @@ def ejecutar_opcion_menu(
 		"1": lambda: gestionar_departamentos_menu(connection, usuario_actual),
 		"2": lambda: mostrar_departamentos(connection),
 		"4": lambda: mostrar_empleados(connection),
-		"5": lambda: crear_proyecto_menu(connection),
+		"5": lambda: crear_proyecto_menu(connection, usuario_actual),
 		"6": lambda: mostrar_proyectos(connection),
-		"7": lambda: asignar_proyecto_menu(connection),
-		"8": lambda: registrar_tiempo_menu(connection),
-		"9": lambda: mostrar_registros_tiempo_menu(connection),
+		"7": lambda: asignar_proyecto_menu(connection, usuario_actual),
+		"8": lambda: registrar_tiempo_menu(connection, usuario_actual),
+		"9": lambda: mostrar_registros_tiempo_menu(connection, usuario_actual),
 		"10": lambda: mostrar_reportes_menu(connection, usuario_actual),
 		"11": lambda: crear_usuario_admin_menu(connection, usuario_actual),
 		"12": lambda: listar_usuarios_admin_menu(connection, usuario_actual),
@@ -712,10 +751,13 @@ def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
 	opciones = [
 		("2", "Listar departamentos"),
 		("4", "Listar empleados"),
-		("5", "Crear proyecto"),
 		("6", "Listar proyectos"),
-		("7", "Asignar empleado a proyecto"),
-		("8", "Registrar horas trabajadas"),
+		(
+			"8",
+			"Registrar horas trabajadas"
+			if usuario_actual.rol in ROLES_GESTION
+			else "Registrar mis horas trabajadas",
+		),
 		(
 			"9",
 			"Ver registros de tiempo"
@@ -731,6 +773,8 @@ def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
 	]
 	if usuario_actual.rol in ROLES_GESTION:
 		opciones.insert(0, ("1", "Gestionar departamentos"))
+		opciones.insert(3, ("5", "Crear proyecto"))
+		opciones.insert(5, ("7", "Asignar empleado a proyecto"))
 		opciones.extend([
 			("11", "Crear usuario"),
 			("12", "Listar usuarios"),

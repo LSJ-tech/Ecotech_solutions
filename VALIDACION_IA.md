@@ -11,6 +11,8 @@
 7. Cambio 15: entrada segura de credenciales con `getpass`.
 8. Cambio 16: correcciones S1192 y S3776 en la interfaz.
 9. Material privado: guion de defensa oral, excluido del repositorio.
+10. Cambios 17 a 24: rol RR.HH., gestión de departamentos, privacidad de horas, usuarios automáticos, limpieza SQLite, eliminación de usuarios y validación interactiva.
+11. Cambio 25: corrección de permisos por rol en proyectos y registros de tiempo.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -653,3 +655,35 @@ acentuados, y rechazan números o símbolos con un mensaje explicativo.
 - Se comprobó que `Ana2`, `Pérez!` y `Lopez-2` son rechazados.
 - Se comprobó que `Ana Maria`, `Pérez` y `López` son aceptados.
 - El editor no reportó errores en `interfaz.py`.
+
+## Cambio 25 - Permisos por rol en proyectos y registros de tiempo
+
+**Fecha:** 2026-09-21
+**Archivo modificado:** `interfaz.py`
+**Objetivo:** corregir dos fugas de permisos detectadas en una revisión crítica del código.
+
+### Hallazgos
+
+1. La opción `Ver mis horas registradas` mostraba los registros de todos los empleados: `mostrar_registros_tiempo_menu()` llamaba a `listar_registros_tiempo()` sin el filtro por RUT que sí aplicaba la opción de reportes. Esto contradecía lo documentado en el Cambio 20.
+2. Las opciones de crear proyecto, asignar empleado a proyecto y registrar horas no verificaban el rol, por lo que un empleado podía crear proyectos, asignar a otras personas y registrar horas a nombre de cualquier RUT.
+
+### Implementación
+
+- Se agregaron tres funciones auxiliares: `verificar_gestion()` lanza `PermissionError` cuando el rol no es `admin` ni `rrhh`; `obtener_rut_propio()` devuelve el RUT del empleado vinculado al usuario o falla con `ValueError` si la cuenta no tiene ficha; `obtener_filtro_rut()` devuelve `None` para roles de gestión y el RUT propio para empleados.
+- `mostrar_registros_tiempo_menu()` y `mostrar_reportes_menu()` usan `obtener_filtro_rut()`, de modo que ambas opciones aplican la misma regla de privacidad. El listado ahora se muestra en una línea legible por registro en lugar de imprimir el diccionario crudo.
+- `crear_proyecto_menu()` y `asignar_proyecto_menu()` reciben el usuario actual y llaman a `verificar_gestion()`.
+- `registrar_tiempo_menu()` solicita el RUT solo a `admin` y `rrhh`; para `empleado` usa automáticamente el RUT de su ficha.
+- El menú oculta `Crear proyecto` y `Asignar empleado a proyecto` a los empleados y rotula la opción 8 como `Registrar mis horas trabajadas`.
+
+### Revisión técnica
+
+La revisión fue apoyada por IA para detectar los puntos donde la interfaz no aplicaba la regla de negocio. El equipo decidió mantener la posibilidad de que un empleado registre sus propias horas (es su operación habitual) y restringir únicamente la creación de proyectos y las asignaciones, que corresponden a gestión. Se centralizó la verificación de permisos en una función para evitar repetir la condición en cada opción.
+
+### Validación
+
+- `py -3 -m py_compile interfaz.py main.py` finalizó correctamente.
+- Prueba en SQLite en memoria con dos empleados, un proyecto y un registro de horas por empleado:
+  - El usuario `empleado` solo ve sus propios registros en la opción 9; `admin` ve ambos.
+  - `crear_proyecto_menu()` y `asignar_proyecto_menu()` rechazan al rol `empleado` con `PermissionError`.
+  - `registrar_tiempo_menu()` no solicita RUT al empleado y guarda el registro con su propio RUT; para `admin` sigue solicitando el RUT.
+  - El menú del empleado no muestra las opciones 5 y 7 y rotula la opción 8 como `Registrar mis horas trabajadas`; el menú de `admin` conserva todas las opciones.
