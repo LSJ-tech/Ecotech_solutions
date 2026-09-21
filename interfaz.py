@@ -2,6 +2,7 @@
 
 from datetime import date
 from getpass import getpass
+import logging
 import sqlite3
 import sys
 
@@ -39,6 +40,7 @@ from main import (
 	verificar_codigo_rol,
 	verificar_contrasena,
 )
+from servicios_externos import ErrorServicioExterno, ServicioClima, validar_ciudad
 
 MENSAJE_CONTRASENA = "Contrasena: "
 MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
@@ -239,6 +241,41 @@ def leer_horas() -> float:
 			print(error)
 
 
+def leer_ciudad_opcional(
+	mensaje: str = "Ciudad del proyecto (Enter si no aplica): ",
+) -> str | None:
+	"""Solicita una ciudad opcional y repite solo si el formato es inválido."""
+
+	while True:
+		valor = input(mensaje).strip()
+		if not valor:
+			return None
+		try:
+			return validar_ciudad(valor)
+		except ValueError as error:
+			print(error)
+
+
+def consultar_clima_menu(connection: sqlite3.Connection) -> None:
+	"""Consulta el clima actual de la ciudad de un proyecto."""
+
+	mostrar_proyectos(connection)
+	id_proyecto = leer_entero("ID del proyecto: ")
+	fila = connection.execute(
+		"SELECT nombre, ciudad FROM proyectos WHERE id_proyecto = ?", (id_proyecto,)
+	).fetchone()
+	if fila is None:
+		raise ValueError("El proyecto indicado no existe.")
+	if not fila["ciudad"]:
+		raise ValueError("El proyecto no tiene una ciudad asignada.")
+	clima = ServicioClima().consultar(fila["ciudad"])
+	print(
+		f"Clima en {clima.ciudad} para el proyecto {fila['nombre']}: "
+		f"{clima.temperatura:.1f} °C, humedad {clima.humedad}%, {clima.descripcion} "
+		f"(consultado {clima.fecha_consulta:%Y-%m-%d %H:%M})"
+	)
+
+
 def registrar_usuario_menu(connection: sqlite3.Connection) -> None:
 	"""Registra un usuario y solicita el codigo adicional para ser admin."""
 
@@ -399,9 +436,10 @@ def mostrar_proyectos(connection: sqlite3.Connection) -> None:
 		return
 	for proyecto in proyectos:
 		fin = proyecto["fecha_fin"] or "En curso"
+		ciudad = proyecto["ciudad"] or "Sin ciudad"
 		print(
 			f"{proyecto['id_proyecto']}: {proyecto['nombre']} | "
-			f"Inicio: {proyecto['fecha_inicio']} | Fin: {fin}"
+			f"Inicio: {proyecto['fecha_inicio']} | Fin: {fin} | Ciudad: {ciudad}"
 		)
 
 
@@ -548,6 +586,7 @@ def crear_proyecto_menu(
 		input("Descripcion: "),
 		fecha_inicio,
 		fecha_fin,
+		leer_ciudad_opcional(),
 	)
 	print(f"Proyecto creado con ID {guardar_proyecto(connection, proyecto)}.")
 
@@ -705,6 +744,7 @@ def ejecutar_opcion_menu(
 		"12": lambda: listar_usuarios_admin_menu(connection, usuario_actual),
 		"13": lambda: cambiar_rol_menu(connection, usuario_actual),
 		"14": lambda: eliminar_usuario_admin_menu(connection, usuario_actual),
+		"15": lambda: consultar_clima_menu(connection),
 	}
 	if opcion == "0":
 		print("Sesion finalizada.")
@@ -742,6 +782,7 @@ def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
 			if usuario_actual.rol in ROLES_GESTION
 			else "Generar mi reporte",
 		),
+		("15", "Consultar clima de un proyecto"),
 	]
 	if usuario_actual.rol in ROLES_GESTION:
 		opciones.insert(0, ("1", "Gestionar departamentos"))
@@ -763,6 +804,12 @@ def mostrar_opciones_menu(usuario_actual: Usuario) -> None:
 def mostrar_menu() -> None:
 	"""Ejecuta el menu principal conectado a la base de datos local."""
 
+	# Los detalles técnicos de los servicios externos van a un archivo, no a la consola.
+	logging.basicConfig(
+		filename=DATABASE_PATH.with_name("ecotech.log"),
+		level=logging.WARNING,
+		format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+	)
 	try:
 		connection = conectar_bd()
 		inicializar_bd(connection)
@@ -785,7 +832,12 @@ def mostrar_menu() -> None:
 			try:
 				if not ejecutar_opcion_menu(connection, usuario_actual, opcion):
 					break
-			except (ValueError, PermissionError, sqlite3.Error) as error:
+			except (
+				ValueError,
+				PermissionError,
+				sqlite3.Error,
+				ErrorServicioExterno,
+			) as error:
 				print(f"No se pudo completar la operacion: {error}")
 	except (EOFError, KeyboardInterrupt):
 		print("\nSesion finalizada por el usuario.")

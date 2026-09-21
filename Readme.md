@@ -19,11 +19,11 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 ## Estado actual
 
 - Unidad 2: criterios 2.1.1 a 2.1.5 implementados y validados.
-- Arquitectura: núcleo de dominio y persistencia en `main.py`; interfaz de consola en `interfaz.py`.
+- Arquitectura: núcleo de dominio y persistencia en `main.py`; servicios externos en `servicios_externos.py`; interfaz de consola en `interfaz.py`.
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
-- Unidad 3: en desarrollo. Paso 1 completado: configuración segura mediante variables de entorno (`.env`) y dependencias declaradas en `requirements.txt`. Pendiente: consumo de APIs de clima e indicadores económicos, manejo de errores HTTP y persistencia de datos externos.
+- Unidad 3: en desarrollo. Paso 1: configuración segura mediante `.env` y `requirements.txt`. Paso 2: consumo de la API de clima (OpenWeatherMap) con `requests`, validación de entradas, manejo de errores HTTP y de red, y ciudad asociada a cada proyecto. Pendiente: indicadores económicos, cálculo de pagos y caché local.
 
 ## Requisitos
 
@@ -36,6 +36,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 ```text
 Ecotech_solutions/
 ├── main.py
+├── servicios_externos.py
 ├── interfaz.py
 ├── requirements.txt
 ├── .env.example
@@ -55,6 +56,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 - Un proyecto puede tener varios empleados asignados.
 - Un registro de tiempo pertenece a un empleado y a un proyecto.
 - Un usuario puede estar asociado a un empleado.
+- Un proyecto puede tener una ciudad asociada (Unidad 3), usada para consultar el clima.
 
 El diagrama original se encuentra en `uml.png`.
 
@@ -165,6 +167,7 @@ Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tabla
 - Permitir que `admin` y `rrhh` gestionen departamentos, usuarios y reportes.
 - Permitir que solo un administrador cambie roles o elimine otras cuentas.
 - Generar reportes en formato de texto tipo PDF o CSV tipo Excel.
+- Consultar el clima actual de la ciudad de un proyecto (opción 15, disponible para todos los roles).
 
 Para cerrar el programa se selecciona la opción `0`. La base de datos se guarda localmente y no se sube a GitHub porque está incluida en `.gitignore`.
 
@@ -196,9 +199,21 @@ Los datos sensibles no se escriben en el código fuente. `main.py` carga el arch
 | `ECOTECH_CODIGO_ADMIN` | Código exigido para registrar una cuenta `admin`. |
 | `ECOTECH_CODIGO_RRHH` | Código exigido para registrar una cuenta `rrhh`. |
 | `ECOTECH_DB_PATH` | Ruta opcional de la base SQLite. |
-| `OPENWEATHER_API_KEY` | Llave del servicio de clima (se utilizará en los siguientes pasos). |
+| `OPENWEATHER_API_KEY` | Llave de OpenWeatherMap para el servicio de clima. |
 
 `.env` está en `.gitignore`; `.env.example` documenta las variables sin valores. Para la entrega comprimida se debe incluir un `.env` con los códigos acordados por el equipo.
+
+## Consumo de servicios externos (Unidad 3)
+
+`servicios_externos.py` concentra el acceso a APIs y no depende de la interfaz.
+
+- `ClienteHTTP` envuelve `requests.Session` con HTTPS obligatorio, `timeout` explícito, un reintento ante timeout o errores 5xx, y traducción de cada código HTTP (401/403, 404, 429, 5xx) y de los errores de red a `ErrorServicioExterno`, cuyo mensaje es apto para el usuario y nunca incluye la URL, los parámetros ni la llave.
+- `IServicioExterno` es la abstracción común; `ServicioClima` la implementa consultando OpenWeatherMap (`/weather`, unidades métricas, idioma español). La llave se lee de `OPENWEATHER_API_KEY` al construir el servicio y se envía solo como parámetro de la petición.
+- La respuesta se valida antes de usarse: se exigen `main.temp`, `main.humidity` y `weather[0].description` con tipos correctos y rangos plausibles; cualquier desviación se rechaza con un mensaje genérico.
+- `validar_ciudad()` acepta únicamente letras, espacios y guiones (2 a 60 caracteres); la entrada se envía mediante `params=` de `requests`, nunca concatenada en la URL.
+- Los detalles técnicos se registran con `logging` en `ecotech.log` (excluido del repositorio); la consola solo muestra el mensaje sanitizado.
+
+Cada proyecto puede tener una ciudad (`proyectos.ciudad`, agregada mediante migración automática en `inicializar_bd()`). La opción `Consultar clima de un proyecto` muestra temperatura, humedad y descripción para apoyar la planificación.
 
 ## Validaciones realizadas
 
@@ -221,6 +236,8 @@ Los datos sensibles no se escriben en el código fuente. `main.py` carga el arch
 - Mensaje de validación de departamentos centralizado en una constante para evitar literales duplicados.
 - Mensajes de menú y consulta de empleado centralizados en constantes de `interfaz.py`; eliminados el import y la función sin uso.
 - Verificación de que los códigos de rol se leen desde `.env`, que un código faltante produce un mensaje claro sin exponer valores y que ningún secreto queda escrito en el código fuente.
+- Pruebas del servicio de clima con respuestas simuladas (`unittest.mock`): 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, cuerpo no JSON y JSON con campos faltantes o fuera de rango; ningún mensaje al usuario contiene la llave.
+- Verificación de la migración de `proyectos.ciudad` sobre una base antigua, del guardado y actualización de la ciudad, del rechazo de ciudades con números o símbolos y de la opción de menú 15.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.

@@ -15,6 +15,7 @@
 11. Cambio 25: corrección de permisos por rol en proyectos y registros de tiempo.
 12. Cambio 26: corrección de avisos de mantenibilidad SonarQube en la interfaz.
 13. Cambio 27 (Unidad 3, paso 1): configuración segura con variables de entorno y dependencias.
+14. Cambio 28 (Unidad 3, paso 2): consumo de la API de clima con `requests`, validación y manejo de errores.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -747,3 +748,35 @@ Se evaluó con apoyo de IA la alternativa de dejar valores por defecto cuando la
 - Prueba automatizada: los códigos se leen desde `.env`; `verificar_codigo_rol()` acepta el código correcto y rechaza uno incorrecto; un rol sin código y una variable vacía producen mensajes claros; ningún literal `"1234"` ni `"12345"` permanece en `main.py` ni `interfaz.py`.
 - Flujo completo de registro de `admin` en SQLite en memoria: un código incorrecto muestra `Codigo secreto incorrecto` y vuelve a solicitarlo; con el código correcto el usuario se crea normalmente.
 - `git status` confirma que `.env` no aparece como archivo a versionar.
+
+## Cambio 28 - Unidad 3, paso 2: consumo de la API de clima
+
+**Fecha:** 2026-09-21
+**Archivo creado:** `servicios_externos.py`
+**Archivos modificados:** `main.py`, `interfaz.py`, `.gitignore`
+**Objetivo:** cubrir los criterios 3.1.1 (consumo de servicios externos con librerías oficiales), 3.1.2 (validación de entradas y control de la llave) y 3.1.3 (manejo de errores y continuidad) con la primera integración que pide la guía: información climática para la planificación de proyectos.
+
+### Implementación
+
+- `ClienteHTTP` encapsula `requests.Session`. Exige HTTPS, aplica `timeout=8` en toda petición, reintenta una vez ante `Timeout` o respuestas 5xx, y convierte cada situación en `ErrorServicioExterno` con un mensaje específico pero sin datos internos: credencial rechazada (401/403), dato no encontrado (404), límite de consultas (429), servicio no disponible (5xx), sin conexión, sin respuesta a tiempo, cuerpo no JSON.
+- `IServicioExterno` define el contrato `consultar()`; `ServicioClima` lo implementa sobre OpenWeatherMap. La llave se obtiene de `OPENWEATHER_API_KEY` en el constructor (si falta, el mensaje indica qué variable definir) y viaja únicamente en `params`, por lo que ningún mensaje ni registro la contiene.
+- `_interpretar()` valida el esquema de la respuesta (`main.temp`, `main.humidity`, `weather[0].description`), convierte tipos y comprueba rangos plausibles (temperatura entre -90 y 60 °C, humedad entre 0 y 100). Un 200 con contenido inesperado se trata como error, no como dato.
+- `validar_ciudad()` restringe la entrada a letras, espacios y guiones (2 a 60 caracteres) antes de salir a la red.
+- `main.py`: columna `proyectos.ciudad` en el esquema y migración automática con `ALTER TABLE` para bases existentes (mismo patrón usado antes para `usuarios.rol`); `Proyecto.ciudad` opcional validado en `__post_init__`; `guardar_proyecto()`, `listar_proyectos()` y `actualizar_proyecto()` incluyen la ciudad.
+- `interfaz.py`: `leer_ciudad_opcional()` al crear proyectos, la ciudad se muestra en el listado, nueva opción 15 `Consultar clima de un proyecto` para todos los roles, y `ErrorServicioExterno` se captura en el bucle principal junto a los errores ya manejados. Los registros técnicos van a `ecotech.log` mediante `logging`; `*.log` se agregó a `.gitignore`.
+
+### Revisión técnica
+
+Se solicitó a la IA un primer borrador del cliente y se revisó críticamente. Se descartaron tres prácticas del borrador: (1) capturar `Exception` de forma genérica y mostrar `str(error)` al usuario, porque `requests` incluye la URL completa con `appid` en sus mensajes y eso expondría la llave; se reemplazó por captura específica y mensajes propios. (2) Omitir `timeout`, lo que dejaría la consola bloqueada indefinidamente si el servicio no responde; se fijó un valor explícito. (3) Usar directamente `datos["main"]["temp"]` sin validar, lo que provocaría `KeyError` ante una respuesta parcial; se agregó validación de esquema y rangos. Se conservó del borrador el uso de `requests.Session` y de `params=`, que evita construir la URL a mano.
+
+Se decidió que la ciudad sea opcional y se guarde en el proyecto, en lugar de pedirla en cada consulta, porque así el dato queda validado una vez y la opción de clima solo requiere elegir el proyecto. La validación de ciudad se reutiliza desde `main.py` mediante `validar_ciudad_opcional()` para no duplicar el patrón.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py servicios_externos.py` finalizó correctamente.
+- Pruebas con `unittest.mock` sobre la sesión HTTP (sin red): respuesta 200 correcta; 401, 404, 429, 500+503, timeout, sin conexión, cuerpo no JSON, JSON sin campos y JSON con valores fuera de rango producen `ErrorServicioExterno` con el mensaje esperado; 500 seguido de 200 devuelve el dato gracias al reintento; en ningún mensaje aparece la llave ni el parámetro `appid`.
+- `validar_ciudad()` rechaza vacío, un carácter, texto con `;`, más de 60 caracteres y ciudades con dígitos; acepta y normaliza `Viña del Mar`.
+- `ClienteHTTP("http://...")` es rechazado por no usar TLS; sin `OPENWEATHER_API_KEY` el servicio informa qué variable configurar.
+- Migración: sobre una tabla `proyectos` antigua sin `ciudad`, `inicializar_bd()` agrega la columna; guardar, listar y actualizar la ciudad funciona; `Proyecto(..., ciudad="Ciudad1")` es rechazado.
+- Menú en SQLite en memoria: crear proyecto repite solo el campo ciudad ante `Calama9` y acepta `Calama`; el listado muestra `Ciudad: Calama` y `Sin ciudad`; la opción 15 sobre un proyecto sin ciudad informa el motivo, y con un servicio simulado muestra `18.4 °C, humedad 55%, cielo claro`.
+- Prueba en vivo: la llave recién creada en OpenWeatherMap respondió 401 durante la sesión (las llaves nuevas tardan hasta dos horas en activarse); el usuario vio únicamente el mensaje sanitizado `El servicio externo rechazó la credencial configurada`, lo que confirma el comportamiento del criterio 3.1.3. Queda pendiente repetir la consulta real cuando la llave esté activa.

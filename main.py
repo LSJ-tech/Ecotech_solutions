@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS proyectos (
 	 nombre TEXT NOT NULL,
 	 descripcion TEXT NOT NULL,
 	 fecha_inicio TEXT NOT NULL,
-	 fecha_fin TEXT
+	 fecha_fin TEXT,
+	 ciudad TEXT
 );
 
 CREATE TABLE IF NOT EXISTS empleado_proyecto (
@@ -142,6 +143,16 @@ def verificar_codigo_rol(rol: str, codigo: str) -> bool:
 	return hmac.compare_digest(codigo.encode("utf-8"), obtener_codigo_rol(rol).encode("utf-8"))
 
 
+def validar_ciudad_opcional(valor: str | None) -> str | None:
+	"""Normaliza la ciudad de un proyecto; vacío significa sin ciudad."""
+
+	if valor is None or not str(valor).strip():
+		return None
+	from servicios_externos import validar_ciudad
+
+	return validar_ciudad(str(valor))
+
+
 def validar_horas(horas: float) -> float:
 	"""Valida el rango permitido para un registro de tiempo."""
 
@@ -188,6 +199,11 @@ def inicializar_bd(connection: sqlite3.Connection) -> None:
 		connection.execute(
 			"ALTER TABLE usuarios ADD COLUMN rol TEXT NOT NULL DEFAULT 'empleado'"
 		)
+	columnas_proyectos = {
+		fila["name"] for fila in connection.execute("PRAGMA table_info(proyectos)")
+	}
+	if "ciudad" not in columnas_proyectos:
+		connection.execute("ALTER TABLE proyectos ADD COLUMN ciudad TEXT")
 	connection.commit()
 
 
@@ -347,14 +363,15 @@ def guardar_proyecto(connection: sqlite3.Connection, proyecto: Proyecto) -> int:
 	cursor = connection.execute(
 		"""
 		INSERT INTO proyectos
-		(nombre, descripcion, fecha_inicio, fecha_fin)
-		VALUES (?, ?, ?, ?)
+		(nombre, descripcion, fecha_inicio, fecha_fin, ciudad)
+		VALUES (?, ?, ?, ?, ?)
 		""",
 		(
 			proyecto.nombre,
 			proyecto.descripcion,
 			proyecto.fecha_inicio.isoformat(),
 			proyecto.fecha_fin.isoformat() if proyecto.fecha_fin else None,
+			proyecto.ciudad,
 		),
 	)
 	connection.commit()
@@ -404,7 +421,7 @@ def listar_proyectos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 	return list(
 		connection.execute(
 			"""
-			SELECT id_proyecto, nombre, descripcion, fecha_inicio, fecha_fin
+			SELECT id_proyecto, nombre, descripcion, fecha_inicio, fecha_fin, ciudad
 			FROM proyectos ORDER BY fecha_inicio, nombre
 			"""
 		)
@@ -420,6 +437,7 @@ def actualizar_proyecto(
 	descripcion: str,
 	fecha_inicio: date,
 	fecha_fin: date | None = None,
+	ciudad: str | None = None,
 ) -> bool:
 	"""Actualiza un proyecto y devuelve si existía."""
 
@@ -432,10 +450,11 @@ def actualizar_proyecto(
 			raise ValueError("La fecha de fin debe ser una fecha válida.")
 		if fecha_fin < fecha_inicio:
 			raise ValueError("La fecha de fin no puede ser anterior a la fecha de inicio.")
+	ciudad = validar_ciudad_opcional(ciudad)
 	cursor = connection.execute(
 		"""
 		UPDATE proyectos
-		SET nombre = ?, descripcion = ?, fecha_inicio = ?, fecha_fin = ?
+		SET nombre = ?, descripcion = ?, fecha_inicio = ?, fecha_fin = ?, ciudad = ?
 		WHERE id_proyecto = ?
 		""",
 		(
@@ -443,6 +462,7 @@ def actualizar_proyecto(
 			descripcion,
 			fecha_inicio.isoformat(),
 			fecha_fin.isoformat() if fecha_fin else None,
+			ciudad,
 			id_proyecto,
 		),
 	)
@@ -735,6 +755,7 @@ class Proyecto:
 	descripcion: str
 	fecha_inicio: date
 	fecha_fin: date | None = None
+	ciudad: str | None = None
 	empleados: list[Empleado] = field(default_factory=list)
 	registros_tiempo: list[RegistroTiempo] = field(default_factory=list)
 
@@ -750,6 +771,7 @@ class Proyecto:
 				raise ValueError("La fecha de fin debe ser una fecha válida.")
 			if self.fecha_fin < self.fecha_inicio:
 				raise ValueError("La fecha de fin no puede ser anterior a la fecha de inicio.")
+		self.ciudad = validar_ciudad_opcional(self.ciudad)
 
 
 class Usuario:
@@ -897,6 +919,7 @@ __all__ = [
 	"listar_registros_tiempo",
 	"listar_usuarios",
 	"obtener_codigo_rol",
+	"validar_ciudad_opcional",
 	"validar_horas",
 	"validar_rut",
 	"validar_texto",

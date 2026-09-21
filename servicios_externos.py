@@ -1,0 +1,189 @@
+"""Consumo seguro de servicios externos para EcoTechSolutions (Unidad 3)."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+import logging
+import os
+import re
+
+import requests
+
+from main import validar_texto
+
+
+TIMEOUT_SEGUNDOS = 8
+REINTENTOS_SERVIDOR = 1
+MENSAJE_RESPUESTA_INVALIDA = "La respuesta del servicio externo no tiene el formato esperado."
+PATRON_CIUDAD = re.compile(r"[A-Za-zÁÉÍÓÚÑáéíóúñü' -]{2,60}")
+
+# El registro técnico va a un archivo local; nunca incluye llaves ni parámetros.
+LOGGER = logging.getLogger("ecotech.servicios")
+
+
+class ErrorServicioExterno(Exception):
+	"""Error con un mensaje apto para mostrar al usuario, sin datos sensibles."""
+
+
+def validar_ciudad(valor: str) -> str:
+	"""Acepta nombres de ciudad con letras, espacios y guiones antes de consultar la API."""
+
+	valor = validar_texto(valor, "La ciudad")
+	if PATRON_CIUDAD.fullmatch(valor) is None:
+		raise ValueError(
+			"La ciudad solo puede contener letras, espacios y guiones (2 a 60 caracteres)."
+		)
+	return valor
+
+
+class ClienteHTTP:
+	"""Encapsula requests con timeout, reintentos y errores traducidos al usuario."""
+
+	def __init__(
+		self,
+		base_url: str,
+		timeout: float = TIMEOUT_SEGUNDOS,
+		sesion: requests.Session | None = None,
+	) -> None:
+		if not base_url.startswith("https://"):
+			raise ValueError("El servicio externo debe usar HTTPS.")
+		self._base_url = base_url.rstrip("/")
+		self._timeout = timeout
+		self._sesion = sesion or requests.Session()
+
+	def obtener_json(self, ruta: str, parametros: dict[str, Any]) -> dict[str, Any]:
+		"""Realiza un GET y devuelve el JSON, o lanza ErrorServicioExterno."""
+
+		url = f"{self._base_url}/{ruta.lstrip('/')}"
+		for intento in range(REINTENTOS_SERVIDOR + 1):
+			try:
+				respuesta = self._sesion.get(url, params=parametros, timeout=self._timeout)
+			except requests.Timeout as error:
+				LOGGER.warning("Timeout al consultar %s", url)
+				if intento < REINTENTOS_SERVIDOR:
+					continue
+				raise ErrorServicioExterno(
+					"El servicio externo no respondió a tiempo. Intente más tarde."
+				) from error
+			except requests.ConnectionError as error:
+				LOGGER.warning("Sin conexión al consultar %s", url)
+				raise ErrorServicioExterno(
+					"No fue posible conectar con el servicio externo. Revise su conexión."
+				) from error
+			except requests.RequestException as error:
+				LOGGER.error("Error de requests al consultar %s: %s", url, type(error).__name__)
+				raise ErrorServicioExterno("Ocurrió un error al consultar el servicio externo.") from error
+
+			if respuesta.status_code >= 500 and intento < REINTENTOS_SERVIDOR:
+				LOGGER.warning("HTTP %s en %s; reintentando", respuesta.status_code, url)
+				continue
+			return self._procesar_respuesta(respuesta, url)
+		raise ErrorServicioExterno("El servicio externo no está disponible.")
+
+	@staticmethod
+	def _procesar_respuesta(respuesta: requests.Response, url: str) -> dict[str, Any]:
+		"""Traduce el código HTTP a un mensaje seguro y valida que el cuerpo sea JSON."""
+
+		codigo = respuesta.status_code
+		if codigo in (401, 403):
+			LOGGER.error("HTTP %s en %s: credencial rechazada", codigo, url)
+			raise ErrorServicioExterno(
+				"El servicio externo rechazó la credencial configurada. Avise al administrador."
+			)
+		if codigo == 404:
+			raise ErrorServicioExterno("El servicio externo no encontró el dato solicitado.")
+		if codigo == 429:
+			raise ErrorServicioExterno(
+				"Se alcanzó el límite de consultas del servicio externo. Intente más tarde."
+			)
+		if codigo >= 500:
+			LOGGER.error("HTTP %s en %s", codigo, url)
+			raise ErrorServicioExterno("El servicio externo no está disponible.")
+		if codigo != 200:
+			LOGGER.error("HTTP %s inesperado en %s", codigo, url)
+			raise ErrorServicioExterno("El servicio externo devolvió una respuesta inesperada.")
+		try:
+			datos = respuesta.json()
+		except ValueError as error:
+			LOGGER.error("Cuerpo no JSON en %s", url)
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
+		if not isinstance(datos, dict):
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
+		return datos
+
+
+@dataclass(frozen=True)
+class Clima:
+	"""Datos climáticos relevantes para planificar un proyecto."""
+
+	ciudad: str
+	temperatura: float
+	humedad: int
+	descripcion: str
+	fecha_consulta: datetime
+
+
+class IServicioExterno(ABC):
+	"""Contrato común para los servicios externos consumidos por el sistema."""
+
+	@abstractmethod
+	def consultar(self, criterio: str) -> Any:
+		"""Consulta el servicio a partir de un criterio ya validado."""
+
+
+class ServicioClima(IServicioExterno):
+	"""Consulta el clima actual de una ciudad en OpenWeatherMap."""
+
+	URL_BASE = "https://api.openweathermap.org/data/2.5"
+	VARIABLE_LLAVE = "OPENWEATHER_API_KEY"
+
+	def __init__(self, cliente: ClienteHTTP | None = None, llave: str | None = None) -> None:
+		self._cliente = cliente or ClienteHTTP(self.URL_BASE)
+		self._llave = (llave or os.environ.get(self.VARIABLE_LLAVE, "")).strip()
+		if not self._llave:
+			raise ErrorServicioExterno(
+				f"El servicio de clima no está configurado. Defina {self.VARIABLE_LLAVE} en .env."
+			)
+
+	def consultar(self, criterio: str) -> Clima:
+		ciudad = validar_ciudad(criterio)
+		datos = self._cliente.obtener_json(
+			"weather",
+			{"q": ciudad, "appid": self._llave, "units": "metric", "lang": "es"},
+		)
+		return self._interpretar(ciudad, datos)
+
+	@staticmethod
+	def _interpretar(ciudad: str, datos: dict[str, Any]) -> Clima:
+		"""Extrae y valida los campos usados; cualquier ausencia o tipo erróneo se rechaza."""
+
+		try:
+			principal = datos["main"]
+			temperatura = float(principal["temp"])
+			humedad = int(principal["humidity"])
+			descripcion = str(datos["weather"][0]["description"]).strip()
+		except (KeyError, IndexError, TypeError, ValueError) as error:
+			LOGGER.error("Clima con formato inesperado para %s", ciudad)
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
+		if not -90 <= temperatura <= 60 or not 0 <= humedad <= 100 or not descripcion:
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
+		return Clima(
+			ciudad=str(datos.get("name") or ciudad),
+			temperatura=temperatura,
+			humedad=humedad,
+			descripcion=descripcion,
+			fecha_consulta=datetime.now(),
+		)
+
+
+__all__ = [
+	"Clima",
+	"ClienteHTTP",
+	"ErrorServicioExterno",
+	"IServicioExterno",
+	"ServicioClima",
+	"validar_ciudad",
+]
