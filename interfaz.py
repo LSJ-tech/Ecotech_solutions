@@ -24,7 +24,6 @@ from main import (
 	asignar_empleado_departamento_bd,
 	conectar_bd,
 	guardar_departamento,
-	guardar_empleado,
 	guardar_proyecto,
 	guardar_registro_tiempo,
 	guardar_usuario,
@@ -44,6 +43,8 @@ from main import (
 
 MENSAJE_CONTRASENA = "Contrasena: "
 MENSAJE_EMPLEADO_INEXISTENTE = "El empleado indicado no existe."
+MENSAJE_OPCION_INVALIDA = "Opcion no valida."
+MENSAJE_SELECCION = "Seleccione una opcion: "
 ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = (
 	"SELECT rut, nombre, apellido, correo, cargo "
@@ -325,7 +326,7 @@ def mostrar_menu_acceso() -> str:
 	print("1. Iniciar sesion")
 	print("2. Registrar usuario")
 	print("0. Salir")
-	return input("Seleccione una opcion: ").strip()
+	return input(MENSAJE_SELECCION).strip()
 
 
 def procesar_opcion_acceso(
@@ -338,7 +339,7 @@ def procesar_opcion_acceso(
 	if opcion == "2":
 		registrar_usuario_menu(connection)
 		return None
-	print("Opcion no valida.")
+	print(MENSAJE_OPCION_INVALIDA)
 	return None
 
 
@@ -361,9 +362,7 @@ def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 			usuario = procesar_opcion_acceso(connection, opcion)
 			if usuario:
 				return usuario
-		except ValueError as error:
-			print(f"No se pudo completar el acceso: {error}")
-		except sqlite3.Error as error:
+		except (ValueError, sqlite3.Error) as error:
 			print(f"No se pudo completar el acceso: {error}")
 
 
@@ -455,28 +454,6 @@ def cambiar_rol_menu(connection: sqlite3.Connection, usuario_actual: Usuario) ->
 	print("Rol actualizado correctamente.")
 
 
-def crear_usuario_menu(connection: sqlite3.Connection) -> None:
-	"""Crea un usuario desde el menu."""
-
-	mostrar_empleados(connection)
-	nombre_usuario = leer_texto("Nombre de usuario: ", "El nombre de usuario")
-	contrasena = leer_contrasena_validada("Contrasena: ")
-	rut_empleado = leer_rut_opcional()
-	empleado = None
-	if rut_empleado:
-		empleado_row = connection.execute(
-			"SELECT rut, nombre, apellido, correo, cargo "
-			"FROM empleados WHERE rut = ?",
-			(rut_empleado,),
-		).fetchone()
-		if not empleado_row:
-			raise ValueError("El empleado indicado no existe.")
-		empleado = Empleado(*empleado_row)
-	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado)
-	id_usuario = guardar_usuario(connection, usuario)
-	print(f"Usuario creado con ID {id_usuario}.")
-
-
 def crear_departamento_menu(connection: sqlite3.Connection) -> None:
 	"""Crea un departamento desde el menu."""
 
@@ -495,7 +472,7 @@ def actualizar_departamento_empleado_menu(
 		"SELECT id_departamento FROM empleados WHERE rut = ?", (rut,)
 	).fetchone()
 	if departamento_actual is None:
-		raise ValueError("El empleado indicado no existe.")
+		raise ValueError(MENSAJE_EMPLEADO_INEXISTENTE)
 	if cambiar and departamento_actual[0] is None:
 		raise ValueError("El empleado no tiene un departamento para cambiar.")
 	if not cambiar and departamento_actual[0] is not None:
@@ -521,7 +498,7 @@ def gestionar_departamento_menu(
 			"2. Cambiar departamento\n"
 			"0. Volver"
 		)
-		opcion = input("Seleccione una opcion: ").strip()
+		opcion = input(MENSAJE_SELECCION).strip()
 		if opcion == "0":
 			return
 		if opcion == "1":
@@ -530,7 +507,7 @@ def gestionar_departamento_menu(
 		if opcion == "2":
 			actualizar_departamento_empleado_menu(connection, cambiar=True)
 			return
-		print("Opcion no valida.")
+		print(MENSAJE_OPCION_INVALIDA)
 
 
 def gestionar_departamentos_menu(
@@ -547,7 +524,7 @@ def gestionar_departamentos_menu(
 			"2. Asignar o cambiar departamento de empleado\n"
 			"0. Volver"
 		)
-		opcion = input("Seleccione una opcion: ").strip()
+		opcion = input(MENSAJE_SELECCION).strip()
 		if opcion == "0":
 			return
 		if opcion == "1":
@@ -556,7 +533,7 @@ def gestionar_departamentos_menu(
 		if opcion == "2":
 			gestionar_departamento_menu(connection, usuario_actual)
 			return
-		print("Opcion no valida.")
+		print(MENSAJE_OPCION_INVALIDA)
 
 
 def crear_proyecto_menu(
@@ -605,10 +582,7 @@ def registrar_tiempo_menu(
 	id_proyecto = leer_entero("ID del proyecto: ")
 	fecha = leer_fecha("Fecha (YYYY-MM-DD): ")
 	horas = leer_horas()
-	empleado_row = connection.execute(
-		"SELECT rut, nombre, apellido, correo, cargo FROM empleados WHERE rut = ?",
-		(rut,),
-	).fetchone()
+	empleado_row = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()
 	proyecto_row = connection.execute(
 		"SELECT id_proyecto, nombre, descripcion, fecha_inicio, fecha_fin "
 		"FROM proyectos WHERE id_proyecto = ?",
@@ -739,7 +713,7 @@ def ejecutar_opcion_menu(
 		return False
 	accion = acciones.get(opcion)
 	if accion is None:
-		print("Opcion no valida.")
+		print(MENSAJE_OPCION_INVALIDA)
 		return True
 	accion()
 	return True
@@ -809,15 +783,11 @@ def mostrar_menu() -> None:
 		print(f"Base de datos conectada: {DATABASE_PATH.name}")
 		while True:
 			mostrar_opciones_menu(usuario_actual)
-			opcion = input("Seleccione una opcion: ").strip()
+			opcion = input(MENSAJE_SELECCION).strip()
 			try:
 				if not ejecutar_opcion_menu(connection, usuario_actual, opcion):
 					break
-			except ValueError as error:
-				print(f"No se pudo completar la operacion: {error}")
-			except PermissionError as error:
-				print(f"No se pudo completar la operacion: {error}")
-			except sqlite3.Error as error:
+			except (ValueError, PermissionError, sqlite3.Error) as error:
 				print(f"No se pudo completar la operacion: {error}")
 	except (EOFError, KeyboardInterrupt):
 		print("\nSesion finalizada por el usuario.")

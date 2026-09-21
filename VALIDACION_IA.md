@@ -13,6 +13,7 @@
 9. Material privado: guion de defensa oral, excluido del repositorio.
 10. Cambios 17 a 24: rol RR.HH., gestión de departamentos, privacidad de horas, usuarios automáticos, limpieza SQLite, eliminación de usuarios y validación interactiva.
 11. Cambio 25: corrección de permisos por rol en proyectos y registros de tiempo.
+12. Cambio 26: corrección de avisos de mantenibilidad SonarQube en la interfaz.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -687,3 +688,30 @@ La revisión fue apoyada por IA para detectar los puntos donde la interfaz no ap
   - `crear_proyecto_menu()` y `asignar_proyecto_menu()` rechazan al rol `empleado` con `PermissionError`.
   - `registrar_tiempo_menu()` no solicita RUT al empleado y guarda el registro con su propio RUT; para `admin` sigue solicitando el RUT.
   - El menú del empleado no muestra las opciones 5 y 7 y rotula la opción 8 como `Registrar mis horas trabajadas`; el menú de `admin` conserva todas las opciones.
+
+## Cambio 26 - Avisos de mantenibilidad SonarQube en la interfaz
+
+**Fecha:** 2026-09-21
+**Archivo modificado:** `interfaz.py`
+**Objetivo:** eliminar los avisos de mantenibilidad reportados por SonarQube tras el Cambio 25.
+
+### Hallazgos
+
+SonarQube reportó tres avisos de mantenibilidad en `interfaz.py`. Un análisis del árbol sintáctico identificó literales duplicados (regla S1192): `"Opcion no valida."` y `"Seleccione una opcion: "` aparecían cuatro veces cada uno, y `"El empleado indicado no existe."` tres veces pese a que ya existía la constante `MENSAJE_EMPLEADO_INEXISTENTE` sin utilizar. Además, la consulta de empleado por RUT estaba escrita tres veces (una en la constante `CONSULTA_EMPLEADO` y dos en línea), `guardar_empleado` se importaba sin usarse y `crear_usuario_menu()` no estaba enlazada a ninguna opción del menú.
+
+### Implementación
+
+- Se agregaron las constantes `MENSAJE_OPCION_INVALIDA` y `MENSAJE_SELECCION`, y se reemplazaron todas las apariciones de sus literales.
+- Se utilizó `MENSAJE_EMPLEADO_INEXISTENTE` y `CONSULTA_EMPLEADO` en los puntos donde el texto estaba repetido.
+- Se eliminó el import de `guardar_empleado`, que no se usaba en la interfaz.
+- Se eliminó `crear_usuario_menu()`, código muerto que duplicaba el flujo de `registrar_usuario_menu()` con un nombre de usuario manual; el registro de usuarios sigue disponible mediante la opción `Crear usuario`.
+- Los bloques `except` consecutivos que imprimían el mismo mensaje en `mostrar_menu()` e `iniciar_sesion()` se unificaron en una sola cláusula con una tupla de excepciones, lo que reduce la complejidad cognitiva sin cambiar el comportamiento.
+
+### Revisión técnica
+
+Se comprobó con un recorrido del AST que no quedan literales de mensaje repetidos tres o más veces ni imports sin uso. Se utilizó IA como apoyo para localizar las duplicidades; la decisión de eliminar `crear_usuario_menu()` en lugar de enlazarla se tomó porque el flujo de registro automático de usuarios ya cubre ese caso y evita mantener dos formularios distintos.
+
+### Validación
+
+- `py -3 -m py_compile interfaz.py` finalizó correctamente.
+- Prueba en SQLite en memoria: el mensaje de empleado inexistente coincide con la constante, el registro de horas del empleado sigue funcionando, las opciones inválidas muestran `Opcion no valida.` y el prompt `Seleccione una opcion: ` se sigue mostrando en los menús.

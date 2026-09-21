@@ -22,7 +22,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Arquitectura: núcleo de dominio y persistencia en `main.py`; interfaz de consola en `interfaz.py`.
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
-- Calidad: correcciones aplicadas para duplicidad, literales repetidos y complejidad cognitiva.
+- Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso y complejidad cognitiva; sin avisos de mantenibilidad SonarQube en la interfaz.
 - Unidad 3: pendiente de implementar el consumo seguro de una API externa, autenticación del servicio, validación de respuestas, manejo de errores HTTP y persistencia de datos externos.
 
 ## Requisitos
@@ -197,6 +197,7 @@ Base de datos conectada: ecotech_solutions.db
 - Un error posterior al RUT no obliga a ingresar nuevamente el RUT ya validado.
 - Cálculo del dígito verificador expresado con ramas `if/elif/else` para facilitar su revisión.
 - Mensaje de validación de departamentos centralizado en una constante para evitar literales duplicados.
+- Mensajes de menú y consulta de empleado centralizados en constantes de `interfaz.py`; eliminados el import y la función sin uso.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.
