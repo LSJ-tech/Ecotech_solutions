@@ -108,8 +108,9 @@ class PruebasValidacionEntradas(unittest.TestCase):
 
 class PruebasClienteHTTP(unittest.TestCase):
 	def assert_error(self, fragmento, **kwargs):
+		servicio = servicio_clima(**kwargs)
 		with self.assertRaises(se.ErrorServicioExterno) as contexto:
-			servicio_clima(**kwargs).consultar("Santiago")
+			servicio.consultar("Santiago")
 		mensaje = str(contexto.exception)
 		self.assertIn(fragmento, mensaje)
 		self.assertNotIn(LLAVE_PRUEBA, mensaje, "el mensaje nunca debe contener la llave")
@@ -146,6 +147,29 @@ class PruebasClienteHTTP(unittest.TestCase):
 		)
 
 
+class PruebasRegistroTecnico(unittest.TestCase):
+	def test_log_no_contiene_la_llave(self):
+		"""Ni los tracebacks ni los mensajes técnicos deben escribir la llave en el log."""
+
+		logger = logging.getLogger("ecotech.servicios")
+		logger.disabled = False
+		try:
+			with self.assertLogs(logger, level="WARNING") as registro:
+				for servicio in (
+					servicio_clima(exc=requests.RequestException("url?appid=" + LLAVE_PRUEBA)),
+					servicio_clima(status=200, json=ValueError),
+					servicio_clima(status=200, json={"main": {}}),
+				):
+					with self.assertRaises(se.ErrorServicioExterno):
+						servicio.consultar("Santiago")
+		finally:
+			logger.disabled = True
+		texto = " | ".join(registro.output)
+		self.assertEqual(len(registro.records), 3)
+		self.assertNotIn(LLAVE_PRUEBA, texto)
+		self.assertNotIn("appid", texto)
+
+
 class PruebasServicioClima(unittest.TestCase):
 	def test_respuesta_correcta(self):
 		clima = servicio_clima(json=RESPUESTA_CLIMA).consultar("Calama")
@@ -160,8 +184,9 @@ class PruebasServicioClima(unittest.TestCase):
 			{"main": {"temp": 20, "humidity": 5}, "weather": []},
 		]
 		for cuerpo in casos:
+			servicio = servicio_clima(json=cuerpo)
 			with self.subTest(cuerpo=cuerpo), self.assertRaises(se.ErrorServicioExterno):
-				servicio_clima(json=cuerpo).consultar("Calama")
+				servicio.consultar("Calama")
 
 	def test_sin_llave_configurada(self):
 		original = os.environ.pop(se.ServicioClima.VARIABLE_LLAVE, None)
@@ -190,8 +215,9 @@ class PruebasServicioIndicadores(unittest.TestCase):
 			{"serie": [{"valor": 5, "fecha": "2099-01-01"}]},
 		]
 		for cuerpo in casos:
+			servicio = servicio_indicadores(json=cuerpo)
 			with self.subTest(cuerpo=cuerpo), self.assertRaises(se.ErrorServicioExterno):
-				servicio_indicadores(json=cuerpo).consultar("dolar")
+				servicio.consultar("dolar")
 
 
 class PruebasCalculoPago(unittest.TestCase):
@@ -199,7 +225,7 @@ class PruebasCalculoPago(unittest.TestCase):
 		pago = main.calcular_pago("11111111-1", 10, 15000, "usd", 958.42)
 		self.assertEqual(pago.monto_clp, 150000.0)
 		self.assertEqual(pago.moneda, "USD")
-		self.assertEqual(pago.monto_moneda, round(150000 / 958.42, 2))
+		self.assertAlmostEqual(pago.monto_moneda, 150000 / 958.42, 2)
 
 	def test_valores_no_positivos_se_rechazan(self):
 		casos = [(0, 1, 1), (1, -1, 1), (1, 1, 0), (True, 1, 1)]
@@ -232,8 +258,9 @@ class PruebasRespaldoLocal(unittest.TestCase):
 		self.assertIn("conectar", resultado.motivo)
 
 	def test_fallo_sin_respaldo_propaga_error(self):
+		servicio = servicio_clima(status=503, json={})
 		with self.assertRaises(se.ErrorServicioExterno):
-			se.consultar_con_respaldo(self.connection, servicio_clima(status=503, json={}), "Antofagasta")
+			se.consultar_con_respaldo(self.connection, servicio, "Antofagasta")
 
 	def test_respaldo_entrega_el_mas_reciente(self):
 		se.consultar_con_respaldo(self.connection, servicio_indicadores(json=RESPUESTA_DOLAR), "dolar")
@@ -250,8 +277,9 @@ class PruebasRespaldoLocal(unittest.TestCase):
 			se.obtener_ultimo_indicador(self.connection, "bitcoin")
 
 	def test_servicio_sin_respaldo_configurado(self):
+		servicio_sin_respaldo = MagicMock(spec=se.IServicioExterno)
 		with self.assertRaises(ValueError):
-			se.consultar_con_respaldo(self.connection, MagicMock(spec=se.IServicioExterno), "x")
+			se.consultar_con_respaldo(self.connection, servicio_sin_respaldo, "x")
 
 
 if __name__ == "__main__":

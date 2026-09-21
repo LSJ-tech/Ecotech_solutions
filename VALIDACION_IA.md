@@ -21,6 +21,7 @@
 17. Cambio 31: menú principal definido en una sola tabla y renumerado de forma consecutiva.
 18. Cambio 32 (Unidad 3, paso 5): revisión de seguridad final, pruebas automatizadas y cierre de la unidad.
 19. Cambio 33: avisos de mantenibilidad SonarQube tras la Unidad 3.
+20. Cambio 34: reglas S5778, S5906 y S8572 de SonarQube y protección de la llave en el registro técnico.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -934,3 +935,32 @@ Se descartó silenciar reglas con comentarios `# NOSONAR`: cada aviso tenía una
 - `py -3 -m py_compile` de los cuatro archivos finalizó correctamente.
 - `py -3 -m unittest test_servicios_externos`: 27 pruebas en verde después de la refactorización del mock.
 - Recorrido del AST sin literales repetidos (según los criterios de S1192), sin imports ni parámetros sin uso y sin funciones sobre 15 de complejidad cognitiva.
+
+## Cambio 34 - Reglas S5778, S5906 y S8572 de SonarQube
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `servicios_externos.py`, `test_servicios_externos.py`
+**Objetivo:** cerrar los siete avisos restantes de SonarQube, identificados por su regla, y resolver el conflicto entre una de ellas y la protección de la llave de la API.
+
+### Hallazgos y correcciones
+
+| Regla | Descripción | Ocurrencias | Corrección |
+|---|---|---|---|
+| S5778 | Dentro de `assertRaises` debe haber una sola invocación; con `servicio_clima(...).consultar(...)` no queda claro cuál debe lanzar la excepción. | 5 | El servicio o el mock se construye antes del bloque `with`, que queda con la única llamada bajo prueba. |
+| S5906 | Debe usarse la aserción más específica: `assertEqual(x, round(y, 2))` es `assertAlmostEqual(x, y, 2)`. | 1 | Aplicado en la prueba de cálculo de pago. |
+| S8572 | En un `except`, `logging.error()` pierde el traceback; usar `logging.exception()`. | 1 | Ver decisión más abajo. |
+
+### Revisión técnica: S8572 frente a la protección de la llave
+
+La regla pide registrar el traceback dentro de los bloques `except`. Se analizó su efecto en cada uno:
+
+- `except ValueError` al decodificar JSON y `except (KeyError, IndexError, TypeError, ValueError)` al interpretar clima e indicadores: las excepciones no contienen la URL ni parámetros; el traceback ayuda a diagnosticar un cambio de formato en la API. Se cambió a `LOGGER.exception()`.
+- `except requests.RequestException`: los mensajes de `requests` incluyen la URL completa con la query string, es decir, `appid=<llave>`. Registrar el traceback escribiría la llave en `ecotech.log`, lo que contradice el criterio 3.1.2. Se decidió **no** registrar el traceback en ese caso: se registra el tipo de excepción y la URL base con `LOGGER.warning()`, con un comentario en el código que explica el motivo. Los `LOGGER.error()` que quedan están en ramas `if` sobre códigos HTTP, no en bloques `except`, y no los cubre la regla.
+
+Para que esta decisión quede verificada y no dependa de la memoria del equipo, se agregó la prueba `test_log_no_contiene_la_llave`: captura el registro con `assertLogs`, provoca un `RequestException` cuyo mensaje contiene `appid=` y la llave, un cuerpo no JSON y un JSON incompleto, y comprueba que se emiten tres registros y que ninguno contiene la llave ni `appid`.
+
+### Validación
+
+- `py -3 -m py_compile servicios_externos.py test_servicios_externos.py` finalizó correctamente.
+- `py -3 -m unittest test_servicios_externos`: 28 pruebas en verde (27 anteriores más la del registro técnico).
+- Cada bloque `assertRaises` del archivo contiene ahora una sola llamada.

@@ -90,7 +90,9 @@ class ClienteHTTP:
 					"No fue posible conectar con el servicio externo. Revise su conexión."
 				) from error
 			except requests.RequestException as error:
-				LOGGER.error("Error de requests al consultar %s: %s", url, type(error).__name__)
+				# Sin traceback a propósito: los mensajes de requests incluyen la URL completa
+				# con la query string (y con ella la llave); solo se registra el tipo de error.
+				LOGGER.warning("Error %s al consultar %s", type(error).__name__, url)
 				raise ErrorServicioExterno("Ocurrió un error al consultar el servicio externo.") from error
 
 			if respuesta.status_code >= 500 and intento < REINTENTOS_SERVIDOR:
@@ -127,7 +129,7 @@ class ClienteHTTP:
 		try:
 			datos = respuesta.json()
 		except ValueError as error:
-			LOGGER.error("Cuerpo no JSON en %s", url)
+			LOGGER.exception("Cuerpo no JSON en %s", url)
 			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
 		if not isinstance(datos, dict):
 			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
@@ -185,7 +187,7 @@ class ServicioClima(IServicioExterno):
 			humedad = int(principal["humidity"])
 			descripcion = str(datos["weather"][0]["description"]).strip()
 		except (KeyError, IndexError, TypeError, ValueError) as error:
-			LOGGER.error("Clima con formato inesperado para %s", ciudad)
+			LOGGER.exception("Clima con formato inesperado para %s", ciudad)
 			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
 		if not -90 <= temperatura <= 60 or not 0 <= humedad <= 100 or not descripcion:
 			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
@@ -233,7 +235,7 @@ class ServicioIndicadores(IServicioExterno):
 			fecha = date.fromisoformat(str(ultimo["fecha"])[:10])
 			nombre = str(datos.get("nombre") or codigo).strip()
 		except (KeyError, IndexError, TypeError, ValueError) as error:
-			LOGGER.error("Indicador con formato inesperado: %s", codigo)
+			LOGGER.exception("Indicador con formato inesperado: %s", codigo)
 			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
 		if valor <= 0 or fecha > date.today():
 			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)

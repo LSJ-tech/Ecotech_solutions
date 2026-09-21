@@ -23,7 +23,7 @@ El desarrollo se realiza de forma incremental. Cada avance se revisa técnicamen
 - Seguridad: PBKDF2 para contraseñas y entrada enmascarada con asteriscos para datos sensibles.
 - Roles: `admin`, `rrhh` y `empleado`, con menús y permisos diferenciados. Los empleados solo ven y registran sus propias horas; crear proyectos y asignar personas es exclusivo de `admin` y `rrhh`.
 - Calidad: correcciones aplicadas para duplicidad, literales repetidos, código sin uso, complejidad cognitiva y fechas con zona horaria; sin avisos de mantenibilidad SonarQube en los módulos ni en las pruebas.
-- Unidad 3: criterios 3.1.1 a 3.1.4 implementados y validados. Consumo de OpenWeatherMap (clima por proyecto) y mindicador.cl (dólar, euro, UF) con `requests`; secretos en `.env`; validación de entradas y de respuestas; manejo de errores HTTP y de red con mensajes sin datos sensibles; respaldo local en SQLite; cálculo de pagos en moneda extranjera; 27 pruebas automatizadas sin red en `test_servicios_externos.py`.
+- Unidad 3: criterios 3.1.1 a 3.1.4 implementados y validados. Consumo de OpenWeatherMap (clima por proyecto) y mindicador.cl (dólar, euro, UF) con `requests`; secretos en `.env`; validación de entradas y de respuestas; manejo de errores HTTP y de red con mensajes sin datos sensibles; respaldo local en SQLite; cálculo de pagos en moneda extranjera; 28 pruebas automatizadas sin red en `test_servicios_externos.py`.
 
 ## Requisitos
 
@@ -153,7 +153,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_servicios_externos
 ```
 
-Las 27 pruebas se ejecutan sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API.
+Las 28 pruebas se ejecutan sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
 ## Ejecución
 
@@ -254,7 +254,7 @@ Los datos sensibles no se escriben en el código fuente. `main.py` carga el arch
 - `IServicioExterno` es la abstracción común; `ServicioClima` la implementa consultando OpenWeatherMap (`/weather`, unidades métricas, idioma español). La llave se lee de `OPENWEATHER_API_KEY` al construir el servicio y se envía solo como parámetro de la petición.
 - La respuesta se valida antes de usarse: se exigen `main.temp`, `main.humidity` y `weather[0].description` con tipos correctos y rangos plausibles; cualquier desviación se rechaza con un mensaje genérico.
 - `validar_ciudad()` acepta únicamente letras, espacios y guiones (2 a 60 caracteres); la entrada se envía mediante `params=` de `requests`, nunca concatenada en la URL.
-- Los detalles técnicos se registran con `logging` en `ecotech.log` (excluido del repositorio); la consola solo muestra el mensaje sanitizado.
+- Los detalles técnicos se registran con `logging` en `ecotech.log` (excluido del repositorio); la consola solo muestra el mensaje sanitizado. Los errores de interpretación (JSON inválido, campos faltantes) se registran con traceback (`logging.exception`); los errores de `requests` se registran solo por tipo, porque sus mensajes incluyen la URL completa con la llave.
 
 Cada proyecto puede tener una ciudad (`proyectos.ciudad`, agregada mediante migración automática en `inicializar_bd()`). La opción `Consultar clima de un proyecto` muestra temperatura, humedad y descripción para apoyar la planificación.
 
@@ -292,8 +292,8 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suite `test_servicios_externos.py` (27 pruebas, `unittest`, sin red) en verde; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
-- Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral.
+- Suite `test_servicios_externos.py` (28 pruebas, `unittest`, sin red) en verde; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.
 - Verificación de filtros de horas y reportes por empleado.
