@@ -55,7 +55,7 @@ Ecotech_solutions/
 
 La implementación utiliza `dataclass` para representar las entidades del diagrama y anotaciones de tipo para expresar sus relaciones:
 
-- Un empleado puede pertenecer a un departamento.
+- Un empleado puede pertenecer a un departamento; un departamento puede tener un empleado como gerente.
 - Un empleado puede participar en varios proyectos.
 - Un proyecto puede tener varios empleados asignados.
 - Un registro de tiempo pertenece a un empleado y a un proyecto.
@@ -65,7 +65,7 @@ La implementación utiliza `dataclass` para representar las entidades del diagra
 
 El diagrama original de la Unidad 1 se encuentra en `uml.png`. El modelo vigente, que integra los requisitos de la guía de la Unidad 1 (dirección, teléfono, fecha de inicio de contrato y salario del empleado; gerente del departamento; descripción de tarea en el registro de tiempo; desasignación de proyectos; informes exportables; cifrado de datos personales) con las clases de la Unidad 3, está en `uml.mmd` (Mermaid) y se renderiza en https://mermaid.live.
 
-Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: `Departamento` sin `gerente`; `RegistroTiempo` sin `descripcion_tarea`; sin `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`; La ficha completa de `Empleado`, `CifradorDatos` y el registro de cuentas restringido a RR.HH. ya están implementados.
+Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos aún no implementados; `uml.mmd` es el modelo objetivo y el código se alinea con él en los cambios siguientes. Hasta completar esa alineación, las diferencias vigentes son: sin `Informe`, `ServicioReportes.guardar()` ni `desasignar_empleado_de_proyecto()`, y sin edición ni eliminación de departamentos, proyectos y registros desde el menú. La ficha completa de `Empleado`, `CifradorDatos`, el registro de cuentas restringido a RR.HH., `Departamento.gerente` y `RegistroTiempo.descripcion_tarea` ya están implementados.
 
 ## Estado de los criterios
 
@@ -75,11 +75,11 @@ Al contrastar el código con la guía de la Unidad 1 se detectaron requisitos a�
 
 El archivo `main.py` contiene las siguientes clases:
 
-- `Departamento`: identifica un departamento y mantiene sus empleados.
+- `Departamento`: identifica un departamento, su gerente (un empleado) y los empleados que lo integran.
 - `Empleado`: representa a un trabajador con su ficha personal (dirección, teléfono, fecha de inicio de contrato y salario), un ID único automático, su departamento, proyectos y registros de tiempo.
 - `Proyecto`: representa un proyecto, sus empleados asignados y sus registros de tiempo.
 - `Usuario`: representa las credenciales y el estado de acceso de un empleado.
-- `RegistroTiempo`: relaciona una fecha y una cantidad de horas con un empleado y un proyecto.
+- `RegistroTiempo`: relaciona una fecha, una cantidad de horas y una breve descripción de las tareas con un empleado y un proyecto.
 
 También se implementaron las operaciones:
 
@@ -158,7 +158,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-`test_nucleo.py` (24 pruebas) cubre el núcleo de la Unidad 2 y el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto): migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+`test_nucleo.py` (32 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento y la descripción de tareas: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
 
 `test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
@@ -237,7 +237,9 @@ Actualmente los roles disponibles son `admin`, `rrhh` y `empleado`. El rol `rrhh
 
 Los empleados solo pueden consultar sus propias horas registradas, registrar horas a su propio nombre y generar su propio reporte. `admin` y `rrhh` pueden crear proyectos, asignar empleados a proyectos, registrar horas de cualquier empleado y consultar los registros generales. Las verificaciones de permiso se aplican tanto al mostrar el menú como al ejecutar la opción, por lo que escribir un número oculto no permite saltarse la restricción.
 
-La opción `Gestionar departamentos` permite crear departamentos y, mediante un submenú, asignar o cambiar el departamento de un empleado. Esta opción está disponible para `admin` y `rrhh`.
+La opción `Gestionar departamentos` permite crear departamentos (con gerente opcional), asignar o cambiar el departamento de un empleado y asignar, cambiar o quitar el gerente. El gerente debe ser un empleado registrado; si ese empleado se elimina, el departamento queda sin gerente (`ON DELETE SET NULL`). Esta opción está disponible para `admin` y `rrhh`.
+
+Al registrar horas se solicita una breve descripción de las tareas realizadas (hasta 200 caracteres), que se muestra en el listado y se incluye en los informes de texto y CSV.
 
 La salida inicial esperada es:
 
@@ -312,7 +314,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suites `test_nucleo.py` (24) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (32) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.

@@ -354,5 +354,104 @@ class PruebasAcceso(unittest.TestCase):
 		self.assertEqual(resultado["u"].rol, "admin")
 
 
+class PruebasGerenteYDescripcionTarea(unittest.TestCase):
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		self.empleado = empleado_completo()
+		main.guardar_empleado(self.connection, self.empleado)
+		self.admin = main.Usuario(1, "admin", "x", rol="admin")
+
+	def tearDown(self):
+		self.connection.close()
+
+	def test_migracion_agrega_gerente_y_descripcion_a_base_antigua(self):
+		antigua = main.conectar_bd(":memory:")
+		antigua.executescript(ESQUEMA_ANTIGUO)
+		main.inicializar_bd(antigua)
+		self.assertIn("rut_gerente", {f["name"] for f in antigua.execute("PRAGMA table_info(departamentos)")})
+		self.assertIn("descripcion_tarea", {f["name"] for f in antigua.execute("PRAGMA table_info(registros_tiempo)")})
+		fila = antigua.execute("SELECT descripcion_tarea FROM registros_tiempo").fetchone()
+		self.assertEqual(fila["descripcion_tarea"], "")
+		antigua.close()
+
+	def test_departamento_con_gerente(self):
+		id_departamento = main.guardar_departamento(self.connection, "Ventas", RUT)
+		fila = main.listar_departamentos(self.connection)[0]
+		self.assertEqual((fila["id_departamento"], fila["gerente"]), (id_departamento, "Ana Perez"))
+		main.asignar_gerente_departamento(self.connection, id_departamento, None)
+		self.assertIsNone(main.listar_departamentos(self.connection)[0]["gerente"])
+		with self.assertRaises(ValueError):
+			main.asignar_gerente_departamento(self.connection, id_departamento, "22222222-2")
+		with self.assertRaises(ValueError):
+			main.asignar_gerente_departamento(self.connection, 99, RUT)
+
+	def test_gerente_eliminado_deja_el_departamento_sin_gerente(self):
+		id_departamento = main.guardar_departamento(self.connection, "Ventas", RUT)
+		main.eliminar_empleado(self.connection, RUT)
+		self.assertIsNone(main.listar_departamentos(self.connection)[0]["rut_gerente"])
+		self.assertEqual(id_departamento, 1)
+
+	def test_modelo_departamento_valida_gerente(self):
+		departamento = main.Departamento(1, "Ventas", gerente=self.empleado)
+		self.assertEqual(departamento.gerente.rut, RUT)
+		with self.assertRaises(ValueError):
+			main.Departamento(1, "Ventas", gerente="no es empleado")
+
+	def _proyecto_asignado(self):
+		proyecto = main.Proyecto(0, "Proy", "Desc", date(2026, 1, 1))
+		main.guardar_proyecto(self.connection, proyecto)
+		main.asignar_empleado_proyecto_bd(self.connection, RUT, proyecto.id_proyecto)
+		return proyecto
+
+	def test_registro_con_descripcion_se_valida_y_persiste(self):
+		proyecto = self._proyecto_asignado()
+		registro = main.RegistroTiempo(
+			0, date(2026, 1, 2), 8, self.empleado, proyecto, "  Instalacion de paneles  "
+		)
+		self.assertEqual(registro.descripcion_tarea, "Instalacion de paneles")
+		main.guardar_registro_tiempo(self.connection, registro)
+		fila = main.listar_registros_tiempo(self.connection)[0]
+		self.assertEqual(fila["descripcion_tarea"], "Instalacion de paneles")
+		with self.assertRaises(ValueError):
+			main.RegistroTiempo(0, date(2026, 1, 2), 8, self.empleado, proyecto, "x" * 201)
+		self.assertTrue(
+			main.actualizar_registro_tiempo(
+				self.connection, fila["id_registro"], fecha=date(2026, 1, 3), horas=4,
+				descripcion_tarea="Revision",
+			)
+		)
+		self.assertEqual(main.listar_registros_tiempo(self.connection)[0]["descripcion_tarea"], "Revision")
+
+	def test_exportadores_incluyen_la_descripcion(self):
+		proyecto = self._proyecto_asignado()
+		registros = [main.RegistroTiempo(1, date(2026, 1, 2), 8, self.empleado, proyecto, 'Tarea "A"')]
+		self.assertIn("- Tarea \"A\"", main.ExportadorPDF().exportar(registros))
+		csv = main.ExportadorExcel().exportar(registros)
+		self.assertIn("descripcion_tarea", csv.splitlines()[0])
+		self.assertTrue(csv.splitlines()[1].endswith(',"Tarea ""A"""'))
+
+	def test_menu_registra_horas_con_descripcion_y_repite_si_esta_vacia(self):
+		proyecto = self._proyecto_asignado()
+		salida = ejecutar_con_entradas(
+			lambda: ui.registrar_tiempo_menu(self.connection, self.admin),
+			[RUT, str(proyecto.id_proyecto), "2026-01-02", "6", "", "Cableado"],
+		)
+		self.assertIn("no puede estar vacío", salida)
+		self.assertIn("guardado correctamente", salida)
+		listado = ejecutar_con_entradas(lambda: ui.mostrar_registros_tiempo_menu(self.connection, self.admin))
+		self.assertIn("| Cableado", listado)
+
+	def test_menu_crea_departamento_y_asigna_gerente(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.crear_departamento_menu(self.connection), ["Ventas", ""]
+		)
+		self.assertIn("creado con ID 1", salida)
+		salida = ejecutar_con_entradas(lambda: ui.asignar_gerente_menu(self.connection), ["1", RUT])
+		self.assertIn("Gerente actualizado", salida)
+		listado = ejecutar_con_entradas(lambda: ui.mostrar_departamentos(self.connection))
+		self.assertIn("Gerente: Ana Perez", listado)
+
+
 if __name__ == "__main__":
 	unittest.main()

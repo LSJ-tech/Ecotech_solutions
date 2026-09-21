@@ -11,6 +11,7 @@ if sys.platform == "win32":
 	import msvcrt
 
 from main import (
+	CAMPO_NOMBRE_DEPARTAMENTO,
 	DATABASE_PATH,
 	ROLES_VALIDOS,
 	Empleado,
@@ -22,6 +23,7 @@ from main import (
 	Usuario,
 	asignar_empleado_proyecto_bd,
 	asignar_empleado_departamento_bd,
+	asignar_gerente_departamento,
 	calcular_pago,
 	calcular_tarifa_hora,
 	conectar_bd,
@@ -39,6 +41,7 @@ from main import (
 	listar_registros_tiempo,
 	listar_usuarios,
 	sumar_horas_empleado,
+	validar_descripcion_tarea,
 	validar_horas,
 	validar_monto,
 	validar_rut,
@@ -253,6 +256,16 @@ def obtener_filtro_rut(usuario_actual: Usuario) -> str | None:
 	if usuario_actual.rol in ROLES_GESTION:
 		return None
 	return obtener_rut_propio(usuario_actual)
+
+
+def leer_descripcion_tarea() -> str:
+	"""Solicita la breve descripción de las tareas realizadas."""
+
+	while True:
+		try:
+			return validar_descripcion_tarea(input("Descripcion breve de las tareas: "))
+		except ValueError as error:
+			print(error)
 
 
 def leer_horas() -> float:
@@ -529,7 +542,8 @@ def mostrar_departamentos(connection: sqlite3.Connection) -> None:
 		print("No hay departamentos registrados.")
 		return
 	for departamento in departamentos:
-		print(f"{departamento['id_departamento']}: {departamento['nombre']}")
+		gerente = departamento["gerente"] or "Sin gerente"
+		print(f"{departamento['id_departamento']}: {departamento['nombre']} | Gerente: {gerente}")
 
 
 def mostrar_empleados(connection: sqlite3.Connection, detallado: bool = False) -> None:
@@ -624,8 +638,22 @@ def cambiar_rol_menu(connection: sqlite3.Connection, usuario_actual: Usuario) ->
 def crear_departamento_menu(connection: sqlite3.Connection) -> None:
 	"""Crea un departamento desde el menu."""
 
-	id_departamento = guardar_departamento(connection, input("Nombre del departamento: "))
+	nombre = leer_texto("Nombre del departamento: ", CAMPO_NOMBRE_DEPARTAMENTO)
+	mostrar_empleados(connection)
+	rut_gerente = leer_rut_opcional("RUT del gerente (Enter para dejar sin gerente): ")
+	id_departamento = guardar_departamento(connection, nombre, rut_gerente)
 	print(f"Departamento creado con ID {id_departamento}.")
+
+
+def asignar_gerente_menu(connection: sqlite3.Connection) -> None:
+	"""Asigna o cambia el gerente de un departamento."""
+
+	mostrar_departamentos(connection)
+	id_departamento = leer_entero("ID del departamento: ")
+	mostrar_empleados(connection)
+	rut_gerente = leer_rut_opcional("RUT del gerente (Enter para quitar el gerente): ")
+	asignar_gerente_departamento(connection, id_departamento, rut_gerente)
+	print("Gerente actualizado correctamente." if rut_gerente else "Departamento sin gerente.")
 
 
 def actualizar_departamento_empleado_menu(
@@ -689,6 +717,7 @@ def gestionar_departamentos_menu(
 			"\n=== GESTIONAR DEPARTAMENTOS ===\n"
 			"1. Crear departamento\n"
 			"2. Asignar o cambiar departamento de empleado\n"
+			"3. Asignar o cambiar gerente\n"
 			"0. Volver"
 		)
 		opcion = input(MENSAJE_SELECCION).strip()
@@ -699,6 +728,9 @@ def gestionar_departamentos_menu(
 			return
 		if opcion == "2":
 			gestionar_departamento_menu(connection, usuario_actual)
+			return
+		if opcion == "3":
+			asignar_gerente_menu(connection)
 			return
 		print(MENSAJE_OPCION_INVALIDA)
 
@@ -750,6 +782,7 @@ def registrar_tiempo_menu(
 	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
 	fecha = leer_fecha("Fecha (YYYY-MM-DD): ")
 	horas = leer_horas()
+	descripcion_tarea = leer_descripcion_tarea()
 	empleado_row = connection.execute(CONSULTA_EMPLEADO, (rut,)).fetchone()
 	proyecto_row = connection.execute(
 		"SELECT id_proyecto, nombre, descripcion, fecha_inicio, fecha_fin "
@@ -768,7 +801,9 @@ def registrar_tiempo_menu(
 		if proyecto_row["fecha_fin"]
 		else None,
 	)
-	guardar_registro_tiempo(connection, RegistroTiempo(0, fecha, horas, empleado, proyecto))
+	guardar_registro_tiempo(
+		connection, RegistroTiempo(0, fecha, horas, empleado, proyecto, descripcion_tarea)
+	)
 	print("Registro de tiempo guardado correctamente.")
 
 
@@ -796,6 +831,7 @@ def mostrar_reportes_menu(
 				fila["horas"],
 				empleado,
 				proyecto,
+				fila["descripcion_tarea"] or "",
 			)
 		)
 	formato = input("Formato (1=PDF texto, 2=Excel CSV): ").strip()
@@ -853,6 +889,7 @@ def mostrar_registros_tiempo_menu(
 			f"{registro['id_registro']}: {registro['fecha']} | "
 			f"{registro['empleado']} ({registro['rut_empleado']}) | "
 			f"{registro['proyecto']} | {registro['horas']} horas"
+			+ (f" | {registro['descripcion_tarea']}" if registro["descripcion_tarea"] else "")
 		)
 
 

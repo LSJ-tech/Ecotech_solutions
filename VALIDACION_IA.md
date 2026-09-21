@@ -26,6 +26,7 @@
 22. Cambio 36 (alineación con la Unidad 1, paso 1): ficha completa del empleado, ID automático y pago desde el salario.
 23. Cambio 37 (alineación con la Unidad 1, paso 2): cifrado en reposo de los datos personales del empleado.
 24. Cambio 38 (alineación con la Unidad 1, paso 3): registro de cuentas restringido a RR.HH. y validación del login.
+25. Cambio 39 (alineación con la Unidad 1, paso 4): gerente de departamento y descripción de tareas en el registro de tiempo.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1080,3 +1081,29 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 
 - `py -3 -m py_compile interfaz.py test_nucleo.py` finalizó correctamente.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 52 pruebas en verde. Las cinco nuevas verifican que sin cuentas el menú ofrece registrar el administrador inicial; que ese registro no pregunta el rol y guarda `admin`; que con cuentas la opción no aparece, la entrada `2` responde con el mensaje de RR.HH. y no crea usuarios; que usuario o contraseña vacíos se rechazan sin consultar la base; y que el login correcto devuelve el usuario con su rol.
+
+## Cambio 39 - Alineación con la Unidad 1, paso 4: gerente y descripción de tareas
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `test_nucleo.py`
+**Objetivo:** cumplir dos requisitos de la guía de la Unidad 1: "cada departamento tendrá un nombre y un gerente asociado" y "los empleados deben poder ingresar la fecha, la cantidad de horas trabajadas y una breve descripción de las tareas realizadas".
+
+### Implementación
+
+- Esquema: `departamentos.rut_gerente TEXT REFERENCES empleados(rut) ON DELETE SET NULL` y `registros_tiempo.descripcion_tarea TEXT NOT NULL DEFAULT ''`. Ambas columnas se agregan con `ALTER TABLE ... ADD COLUMN` en `inicializar_bd()` cuando faltan; SQLite lo permite porque tienen valor por defecto nulo o vacío, así que no fue necesaria una reconstrucción como la de `empleados`.
+- `Departamento.gerente: Empleado | None` en el modelo; `guardar_departamento()` y `actualizar_departamento()` aceptan el RUT del gerente; `asignar_gerente_departamento()` lo asigna o lo quita (`None`); `verificar_gerente()` normaliza el RUT y exige que exista como empleado. `listar_departamentos()` devuelve el nombre completo del gerente mediante `LEFT JOIN`.
+- `RegistroTiempo.descripcion_tarea` con `validar_descripcion_tarea()` (texto obligatorio cuando se informa, máximo 200 caracteres). Se persiste en `guardar_registro_tiempo()`, se lee en `listar_registros_tiempo()` y se puede modificar en `actualizar_registro_tiempo()`. Los registros anteriores conservan una descripción vacía.
+- Exportadores: `ExportadorPDF` agrega la descripción al final de cada línea; `ExportadorExcel` agrega la columna `descripcion_tarea` entre comillas, duplicando las comillas internas según el formato CSV.
+- Interfaz: crear departamento pide un gerente opcional; el submenú de departamentos incorpora `3. Asignar o cambiar gerente`; el listado de departamentos muestra el gerente; registrar horas solicita la descripción (`leer_descripcion_tarea()` repite solo ese campo si está vacía o es demasiado larga); el listado de registros y los reportes la incluyen.
+
+### Revisión técnica
+
+- La IA propuso `gerente` como texto libre, como en el UML de la Unidad 1 (`director: str`). Se descartó: un gerente es un empleado de la empresa, y modelarlo como clave foránea evita duplicar nombres, permite mostrar sus datos desde la ficha y define qué pasa si el empleado se elimina (`ON DELETE SET NULL`, para no borrar el departamento).
+- Se evaluó exigir que el gerente pertenezca al departamento que dirige. Se descartó porque la guía no lo pide y la organización puede designar un gerente de otra área; la restricción se puede agregar más adelante sin cambiar el esquema.
+- Para el CSV la IA sugirió concatenar la descripción sin comillas. Se corrigió: una descripción con comas rompería las columnas; se aplica el escapado estándar de CSV (campo entre comillas, comillas internas duplicadas), verificado por prueba.
+
+### Validación
+
+- `py -3 -m py_compile main.py interfaz.py test_nucleo.py` y `ruff check --select F` sin nombres indefinidos.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 60 pruebas en verde. Las ocho nuevas verifican la migración de ambas columnas sobre una base antigua (registro previo con descripción vacía); crear departamento con gerente, quitarlo, rechazar un RUT inexistente y un departamento inexistente; que eliminar al gerente deja el departamento sin gerente sin borrarlo; que el modelo rechaza un gerente que no es `Empleado`; que la descripción se normaliza, se persiste, se actualiza y rechaza más de 200 caracteres; que ambos exportadores la incluyen (CSV con escapado de comillas); y los flujos de menú de registro de horas (repite la descripción vacía) y de creación y asignación de gerente.
+- Migración sobre una copia de `ecotech_solutions.db` real: columnas agregadas y `foreign_key_check` vacío.

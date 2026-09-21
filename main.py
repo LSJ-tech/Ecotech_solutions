@@ -31,6 +31,7 @@ VARIABLES_CODIGO_ROL = {
 }
 ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
+LARGO_MAXIMO_DESCRIPCION_TAREA = 200
 CODIFICACION = "utf-8"
 # Valor hora según la fórmula de la Dirección del Trabajo: sueldo mensual / 30 x 7 / jornada semanal.
 JORNADA_SEMANAL_HORAS = 44
@@ -44,7 +45,8 @@ PREFIJO_TOKEN_FERNET = "gAAAAA"
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS departamentos (
 	 id_departamento INTEGER PRIMARY KEY AUTOINCREMENT,
-	 nombre TEXT NOT NULL UNIQUE
+	 nombre TEXT NOT NULL UNIQUE,
+	 rut_gerente TEXT REFERENCES empleados(rut) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS empleados (
@@ -93,6 +95,7 @@ CREATE TABLE IF NOT EXISTS registros_tiempo (
 	 id_registro INTEGER PRIMARY KEY AUTOINCREMENT,
 	 fecha TEXT NOT NULL,
 	 horas REAL NOT NULL CHECK (horas > 0 AND horas <= 24),
+	 descripcion_tarea TEXT NOT NULL DEFAULT '',
 	 rut_empleado TEXT NOT NULL,
 	 id_proyecto INTEGER NOT NULL,
 	 FOREIGN KEY (rut_empleado) REFERENCES empleados(rut) ON DELETE CASCADE,
@@ -305,6 +308,17 @@ def cifrar_datos_personales_pendientes(connection: sqlite3.Connection) -> int:
 	return len(pendientes)
 
 
+def validar_descripcion_tarea(valor: str) -> str:
+	"""Valida la breve descripción de las tareas de un registro de tiempo."""
+
+	valor = validar_texto(valor, "La descripción de la tarea")
+	if len(valor) > LARGO_MAXIMO_DESCRIPCION_TAREA:
+		raise ValueError(
+			f"La descripción de la tarea no puede superar {LARGO_MAXIMO_DESCRIPCION_TAREA} caracteres."
+		)
+	return valor
+
+
 def validar_telefono(valor: str) -> str:
 	"""Acepta teléfonos con dígitos, espacios y prefijo + (8 a 15 caracteres)."""
 
@@ -406,6 +420,22 @@ def inicializar_bd(connection: sqlite3.Connection) -> None:
 	}
 	if "id_empleado" not in columnas_empleados:
 		migrar_tabla_empleados(connection)
+	columnas_departamentos = {
+		fila["name"] for fila in connection.execute("PRAGMA table_info(departamentos)")
+	}
+	if "rut_gerente" not in columnas_departamentos:
+		connection.execute(
+			"ALTER TABLE departamentos ADD COLUMN rut_gerente TEXT "
+			"REFERENCES empleados(rut) ON DELETE SET NULL"
+		)
+	columnas_registros = {
+		fila["name"] for fila in connection.execute("PRAGMA table_info(registros_tiempo)")
+	}
+	if "descripcion_tarea" not in columnas_registros:
+		connection.execute(
+			"ALTER TABLE registros_tiempo ADD COLUMN descripcion_tarea TEXT NOT NULL DEFAULT ''"
+		)
+	connection.commit()
 	cifrar_datos_personales_pendientes(connection)
 
 
@@ -478,15 +508,45 @@ def verificar_contrasena(contrasena: str, almacenada: str) -> bool:
 
 
 @revertir_si_falla
-def guardar_departamento(connection: sqlite3.Connection, nombre: str) -> int:
-	"""Inserta un departamento y devuelve su identificador."""
+def guardar_departamento(
+	connection: sqlite3.Connection, nombre: str, rut_gerente: str | None = None
+) -> int:
+	"""Inserta un departamento, opcionalmente con su gerente, y devuelve su identificador."""
 
 	nombre = validar_texto(nombre, CAMPO_NOMBRE_DEPARTAMENTO)
+	rut_gerente = verificar_gerente(connection, rut_gerente)
 	cursor = connection.execute(
-		"INSERT INTO departamentos (nombre) VALUES (?)", (nombre,)
+		"INSERT INTO departamentos (nombre, rut_gerente) VALUES (?, ?)", (nombre, rut_gerente)
 	)
 	connection.commit()
 	return int(cursor.lastrowid)
+
+
+def verificar_gerente(connection: sqlite3.Connection, rut: str | None) -> str | None:
+	"""Normaliza el RUT del gerente y comprueba que corresponda a un empleado existente."""
+
+	if rut is None or not str(rut).strip():
+		return None
+	rut = validar_rut(rut)
+	if connection.execute("SELECT 1 FROM empleados WHERE rut = ?", (rut,)).fetchone() is None:
+		raise ValueError("El gerente indicado no existe como empleado.")
+	return rut
+
+
+@revertir_si_falla
+def asignar_gerente_departamento(
+	connection: sqlite3.Connection, id_departamento: int, rut_gerente: str | None
+) -> None:
+	"""Asigna (o quita, con None) el gerente de un departamento existente."""
+
+	rut_gerente = verificar_gerente(connection, rut_gerente)
+	cursor = connection.execute(
+		"UPDATE departamentos SET rut_gerente = ? WHERE id_departamento = ?",
+		(rut_gerente, id_departamento),
+	)
+	if cursor.rowcount != 1:
+		raise ValueError("El departamento indicado no existe.")
+	connection.commit()
 
 
 @revertir_si_falla
@@ -659,21 +719,31 @@ def listar_departamentos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
 
 	return list(
 		connection.execute(
-			"SELECT id_departamento, nombre FROM departamentos ORDER BY nombre"
+			"""
+			SELECT d.id_departamento, d.nombre, d.rut_gerente,
+			       e.nombre || ' ' || e.apellido AS gerente
+			FROM departamentos AS d
+			LEFT JOIN empleados AS e ON e.rut = d.rut_gerente
+			ORDER BY d.nombre
+			"""
 		)
 	)
 
 
 @revertir_si_falla
 def actualizar_departamento(
-	connection: sqlite3.Connection, id_departamento: int, nombre: str
+	connection: sqlite3.Connection,
+	id_departamento: int,
+	nombre: str,
+	rut_gerente: str | None = None,
 ) -> bool:
-	"""Actualiza un departamento y devuelve si existía."""
+	"""Actualiza nombre y gerente de un departamento y devuelve si existía."""
 
 	nombre = validar_texto(nombre, CAMPO_NOMBRE_DEPARTAMENTO)
+	rut_gerente = verificar_gerente(connection, rut_gerente)
 	cursor = connection.execute(
-		"UPDATE departamentos SET nombre = ? WHERE id_departamento = ?",
-		(nombre, id_departamento),
+		"UPDATE departamentos SET nombre = ?, rut_gerente = ? WHERE id_departamento = ?",
+		(nombre, rut_gerente, id_departamento),
 	)
 	connection.commit()
 	return cursor.rowcount == 1
@@ -924,12 +994,13 @@ def guardar_registro_tiempo(
 	cursor = connection.execute(
 		"""
 		INSERT INTO registros_tiempo
-		(fecha, horas, rut_empleado, id_proyecto)
-		VALUES (?, ?, ?, ?)
+		(fecha, horas, descripcion_tarea, rut_empleado, id_proyecto)
+		VALUES (?, ?, ?, ?, ?)
 		""",
 		(
 			registro.fecha.isoformat(),
 			registro.horas,
+			registro.descripcion_tarea,
 			registro.empleado.rut,
 			registro.proyecto.id_proyecto,
 		),
@@ -954,7 +1025,7 @@ def listar_registros_tiempo(
 	"""Consulta registros de todos o de un empleado específico."""
 
 	consulta = """
-		SELECT r.id_registro, r.fecha, r.horas, r.rut_empleado,
+		SELECT r.id_registro, r.fecha, r.horas, r.descripcion_tarea, r.rut_empleado,
 		       r.id_proyecto, e.nombre AS empleado, p.nombre AS proyecto
 		FROM registros_tiempo AS r
 		JOIN empleados AS e ON e.rut = r.rut_empleado
@@ -975,18 +1046,20 @@ def actualizar_registro_tiempo(
 	*,
 	fecha: date,
 	horas: float,
+	descripcion_tarea: str = "",
 ) -> bool:
-	"""Actualiza fecha y horas de un registro de tiempo."""
+	"""Actualiza fecha, horas y descripción de un registro de tiempo."""
 
 	if not isinstance(fecha, date):
 		raise ValueError("La fecha del registro debe ser una fecha válida.")
 	horas = validar_horas(horas)
+	descripcion_tarea = validar_descripcion_tarea(descripcion_tarea) if descripcion_tarea else ""
 	cursor = connection.execute(
 		"""
-		UPDATE registros_tiempo SET fecha = ?, horas = ?
+		UPDATE registros_tiempo SET fecha = ?, horas = ?, descripcion_tarea = ?
 		WHERE id_registro = ?
 		""",
-		(fecha.isoformat(), horas, id_registro),
+		(fecha.isoformat(), horas, descripcion_tarea, id_registro),
 	)
 	connection.commit()
 	return cursor.rowcount == 1
@@ -1009,12 +1082,15 @@ class Departamento:
 
 	id_departamento: int
 	nombre: str
+	gerente: Empleado | None = None
 	empleados: list[Empleado] = field(default_factory=list)
 
 	def __post_init__(self) -> None:
 		if self.id_departamento < 0:
 			raise ValueError("El identificador del departamento no puede ser negativo.")
 		self.nombre = validar_texto(self.nombre, CAMPO_NOMBRE_DEPARTAMENTO)
+		if self.gerente is not None and not isinstance(self.gerente, Empleado):
+			raise ValueError("El gerente debe ser un empleado válido.")
 
 
 @dataclass
@@ -1140,6 +1216,7 @@ class RegistroTiempo:
 	horas: float
 	empleado: Empleado
 	proyecto: Proyecto
+	descripcion_tarea: str = ""
 
 	def __post_init__(self) -> None:
 		if self.id_registro < 0:
@@ -1147,6 +1224,10 @@ class RegistroTiempo:
 		if not isinstance(self.fecha, date):
 			raise ValueError("La fecha del registro debe ser una fecha válida.")
 		self.horas = validar_horas(self.horas)
+		# Vacío solo para registros anteriores a la Unidad 1 alineada; si viene, se valida.
+		self.descripcion_tarea = (
+			validar_descripcion_tarea(self.descripcion_tarea) if self.descripcion_tarea else ""
+		)
 		if not isinstance(self.empleado, Empleado):
 			raise ValueError("El registro debe estar asociado a un empleado válido.")
 		if not isinstance(self.proyecto, Proyecto):
@@ -1204,6 +1285,7 @@ class ExportadorPDF(IExportador):
 		lineas.extend(
 			f"{registro.fecha}: {registro.empleado.nombre} "
 			f"- {registro.proyecto.nombre} - {registro.horas} horas"
+			+ (f" - {registro.descripcion_tarea}" if registro.descripcion_tarea else "")
 			for registro in registros
 		)
 		return "\n".join(lineas)
@@ -1213,10 +1295,11 @@ class ExportadorExcel(IExportador):
 	"""Genera datos separados por comas para una hoja de cálculo."""
 
 	def exportar(self, registros: list[RegistroTiempo]) -> str:
-		lineas = ["fecha,empleado,proyecto,horas"]
+		lineas = ["fecha,empleado,proyecto,horas,descripcion_tarea"]
 		lineas.extend(
 			f"{registro.fecha},{registro.empleado.nombre},"
-			f"{registro.proyecto.nombre},{registro.horas}"
+			f"{registro.proyecto.nombre},{registro.horas},"
+			f"\"{registro.descripcion_tarea.replace(chr(34), chr(34) * 2)}\""
 			for registro in registros
 		)
 		return "\n".join(lineas)
@@ -1251,6 +1334,7 @@ __all__ = [
 	"asignar_empleado_a_proyecto",
 	"asignar_empleado_departamento_bd",
 	"asignar_empleado_proyecto_bd",
+	"asignar_gerente_departamento",
 	"calcular_pago",
 	"calcular_tarifa_hora",
 	"cifrar_datos_personales_pendientes",
@@ -1274,6 +1358,7 @@ __all__ = [
 	"obtener_codigo_rol",
 	"sumar_horas_empleado",
 	"validar_ciudad_opcional",
+	"validar_descripcion_tarea",
 	"validar_horas",
 	"validar_monto",
 	"validar_rut",
