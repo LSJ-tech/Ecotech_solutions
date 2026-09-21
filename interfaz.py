@@ -686,24 +686,48 @@ def iniciar_sesion(connection: sqlite3.Connection) -> Usuario | None:
 			print(f"No se pudo completar el acceso: {error}")
 
 
-def mostrar_departamentos(connection: sqlite3.Connection) -> None:
-	"""Muestra los departamentos almacenados."""
+def leer_filtro(mensaje: str) -> str | None:
+	"""Solicita un texto de búsqueda opcional; Enter devuelve None (sin filtro)."""
 
-	departamentos = listar_departamentos(connection)
+	return input(mensaje).strip() or None
+
+
+def mostrar_departamentos(connection: sqlite3.Connection, filtro: str | None = None) -> None:
+	"""Muestra los departamentos, todos o los que coinciden con el filtro por nombre."""
+
+	departamentos = listar_departamentos(connection, filtro)
 	if not departamentos:
-		print("No hay departamentos registrados.")
+		print(
+			f"No hay departamentos que coincidan con '{filtro}'."
+			if filtro
+			else "No hay departamentos registrados."
+		)
 		return
 	for departamento in departamentos:
 		gerente = departamento["gerente"] or "Sin gerente"
 		print(f"{departamento['id_departamento']}: {departamento['nombre']} | Gerente: {gerente}")
 
 
-def mostrar_empleados(connection: sqlite3.Connection, detallado: bool = False) -> None:
-	"""Muestra los empleados; los datos personales solo se incluyen si detallado es True."""
+def listar_departamentos_menu(connection: sqlite3.Connection) -> None:
+	"""Lista todos los departamentos o busca por nombre."""
 
-	empleados = listar_empleados(connection)
+	mostrar_departamentos(
+		connection, leer_filtro("Buscar por nombre (Enter para listar todos): ")
+	)
+
+
+def mostrar_empleados(
+	connection: sqlite3.Connection, detallado: bool = False, filtro: str | None = None
+) -> None:
+	"""Muestra los empleados (todos o filtrados); los datos personales solo si detallado es True."""
+
+	empleados = listar_empleados(connection, filtro)
 	if not empleados:
-		print("No hay empleados registrados.")
+		print(
+			f"No hay empleados que coincidan con '{filtro}'."
+			if filtro
+			else "No hay empleados registrados."
+		)
 		return
 	for empleado in empleados:
 		linea = (
@@ -722,6 +746,16 @@ def mostrar_empleados(connection: sqlite3.Connection, detallado: bool = False) -
 				f"Salario: {salario}"
 			)
 		print(linea)
+
+
+def listar_empleados_menu(connection: sqlite3.Connection, detallado: bool) -> None:
+	"""Lista todos los empleados o busca por RUT, nombre o apellido."""
+
+	mostrar_empleados(
+		connection,
+		detallado,
+		leer_filtro("Buscar por RUT, nombre o apellido (Enter para listar todos): "),
+	)
 
 
 def mostrar_proyectos(connection: sqlite3.Connection) -> None:
@@ -1318,10 +1352,12 @@ def construir_opciones_menu(
 	opciones = [
 		("1", "Gestionar departamentos", gestion,
 			lambda: gestionar_departamentos_menu(connection, usuario_actual)),
-		("2", "Listar departamentos", True, lambda: mostrar_departamentos(connection)),
+		("2", "Listar o buscar departamentos", True,
+			lambda: listar_departamentos_menu(connection)),
 		("3", "Gestionar empleados", gestion,
 			lambda: gestionar_empleados_menu(connection, usuario_actual)),
-		("4", "Listar empleados", True, lambda: mostrar_empleados(connection, detallado=gestion)),
+		("4", "Listar o buscar empleados", True,
+			lambda: listar_empleados_menu(connection, detallado=gestion)),
 		("5", "Gestionar proyectos", gestion,
 			lambda: gestionar_proyectos_menu(connection, usuario_actual)),
 		("6", "Listar proyectos", True, lambda: mostrar_proyectos(connection)),

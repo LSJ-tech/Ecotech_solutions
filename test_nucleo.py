@@ -625,8 +625,8 @@ class PruebasCrudCompleto(unittest.TestCase):
 	def test_menu_principal_agrupa_crud_por_entidad(self):
 		gestion = [texto for _n, texto, _a in ui.construir_opciones_menu(self.connection, self.admin)]
 		self.assertEqual(gestion[:6], [
-			"Gestionar departamentos", "Listar departamentos", "Gestionar empleados",
-			"Listar empleados", "Gestionar proyectos", "Listar proyectos",
+			"Gestionar departamentos", "Listar o buscar departamentos", "Gestionar empleados",
+			"Listar o buscar empleados", "Gestionar proyectos", "Listar proyectos",
 		])
 		empleado = ui.construir_opciones_menu(self.connection, self.cuenta_empleado)
 		numeros = [numero for numero, _t, _a in empleado]
@@ -756,6 +756,54 @@ class PruebasPoliticaContrasenas(unittest.TestCase):
 			["Logan", "Silva", "Jara"],
 		)
 		self.assertIn("lsilva", salida)
+
+
+class PruebasBusquedas(unittest.TestCase):
+	"""Búsqueda parcial de departamentos y empleados desde el núcleo y el menú."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		for nombre in ("Ventas", "Investigacion y Desarrollo", "Desarrollo Sostenible", "100% Verde"):
+			main.guardar_departamento(self.connection, nombre)
+		main.guardar_empleado(self.connection, empleado_completo())
+		main.guardar_empleado(self.connection, empleado_completo("22222222-2", "beto@x.cl"))
+		self.connection.execute("UPDATE empleados SET nombre = 'Beto', apellido = 'Rojas' WHERE rut = '22222222-2'")
+		self.connection.commit()
+		self.admin = main.Usuario(1, "admin", "x", rol="admin")
+
+	def tearDown(self):
+		self.connection.close()
+
+	def test_departamentos_por_nombre_parcial_sin_distinguir_mayusculas(self):
+		nombres = [d["nombre"] for d in main.listar_departamentos(self.connection, "desarrollo")]
+		self.assertEqual(nombres, ["Desarrollo Sostenible", "Investigacion y Desarrollo"])
+		self.assertEqual(len(main.listar_departamentos(self.connection, "")), 4)
+		self.assertEqual(main.listar_departamentos(self.connection, "zzz"), [])
+
+	def test_los_comodines_de_like_se_tratan_como_texto(self):
+		self.assertEqual(main.patron_busqueda("a%b_c"), "%a\\%b\\_c%")
+		self.assertEqual([d["nombre"] for d in main.listar_departamentos(self.connection, "%")], ["100% Verde"])
+		self.assertEqual(main.listar_departamentos(self.connection, "_"), [])
+
+	def test_empleados_por_rut_nombre_o_apellido(self):
+		self.assertEqual([e["rut"] for e in main.listar_empleados(self.connection, "2222")], ["22222222-2"])
+		self.assertEqual([e["nombre"] for e in main.listar_empleados(self.connection, "ana")], ["Ana"])
+		self.assertEqual([e["apellido"] for e in main.listar_empleados(self.connection, "roj")], ["Rojas"])
+		self.assertEqual(len(main.listar_empleados(self.connection)), 2)
+
+	def test_menu_lista_todo_con_enter_y_busca_con_texto(self):
+		salida = ejecutar_con_entradas(lambda: ui.listar_departamentos_menu(self.connection), [""])
+		self.assertIn("Ventas", salida)
+		self.assertIn("100% Verde", salida)
+		salida = ejecutar_con_entradas(lambda: ui.listar_departamentos_menu(self.connection), ["ventas"])
+		self.assertIn("Ventas", salida)
+		self.assertNotIn("Verde", salida)
+		salida = ejecutar_con_entradas(lambda: ui.listar_departamentos_menu(self.connection), ["nada"])
+		self.assertIn("No hay departamentos que coincidan con 'nada'", salida)
+		salida = ejecutar_con_entradas(lambda: ui.listar_empleados_menu(self.connection, True), ["beto"])
+		self.assertIn("Beto Rojas", salida)
+		self.assertNotIn("Ana", salida)
 
 
 if __name__ == "__main__":

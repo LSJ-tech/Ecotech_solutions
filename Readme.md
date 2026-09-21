@@ -159,7 +159,7 @@ La revisión crítica se documenta en `VALIDACION_IA.md`, donde se describen los
 py -3 -m unittest -v test_nucleo test_servicios_externos
 ```
 
-`test_nucleo.py` (53 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento, la descripción de tareas y el CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios) y los informes (`Informe`, exportadores, escritura a archivo, exclusión de datos cifrados) y la política de contraseñas: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
+`test_nucleo.py` (57 pruebas) cubre el núcleo de la Unidad 2, el flujo de acceso (administrador inicial, autoregistro cerrado, credenciales vacías, login correcto), el gerente de departamento, la descripción de tareas y el CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios) y los informes (`Informe`, exportadores, escritura a archivo, exclusión de datos cifrados) la política de contraseñas y las búsquedas: migración de una base antigua a la nueva tabla `empleados` conservando filas y claves foráneas, validaciones de la ficha del empleado, valor hora, persistencia y actualización con los nuevos campos, cifrado en reposo (la base solo contiene tokens, clave incorrecta o ausente informada con claridad, cifrado de valores heredados), registro desde el menú, listado con y sin datos personales, y cálculo de pago desde el salario.
 
 `test_servicios_externos.py` (28 pruebas) se ejecuta sin red: simulan la sesión HTTP con `unittest.mock` para cubrir respuestas correctas, cada código de error, timeout, sin conexión, JSON inválido o fuera de rango, respuestas demasiado grandes, la validación de entradas, el cálculo de pagos y el respaldo local en SQLite en memoria. Una de ellas verifica que ningún mensaje de error contenga la llave de la API y otra que tampoco aparezca en el registro técnico, incluso cuando se guarda el traceback.
 
@@ -188,7 +188,7 @@ La interfaz de consola se encuentra separada exclusivamente en `interfaz.py`. El
 
 Al iniciar, el programa crea `ecotech_solutions.db` si no existe, crea sus tablas y muestra un menú para:
 
-- Crear, listar, editar y eliminar departamentos, empleados y proyectos (los submenús `Gestionar …` son exclusivos de `admin` y `rrhh`).
+- Crear, listar, buscar, editar y eliminar departamentos, empleados y proyectos (los submenús `Gestionar …` son exclusivos de `admin` y `rrhh`).
 - Asignar y desasignar empleados de proyectos (solo `admin` y `rrhh`).
 - Registrar horas trabajadas (los empleados solo las propias).
 - Consultar, editar y eliminar registros de tiempo (los empleados solo los propios).
@@ -217,9 +217,9 @@ Menú completo (los roles ven solo lo permitido):
 | N.º | Opción | Roles |
 |---|---|---|
 | 1 | Gestionar departamentos: crear, editar nombre, eliminar, asignar o cambiar gerente, asignar o cambiar departamento de un empleado | admin, rrhh |
-| 2 | Listar departamentos | todos |
+| 2 | Listar o buscar departamentos por nombre (Enter lista todos) | todos |
 | 3 | Gestionar empleados: editar ficha (Enter conserva cada valor), eliminar | admin, rrhh |
-| 4 | Listar empleados (admin y rrhh ven además la ficha personal) | todos |
+| 4 | Listar o buscar empleados por RUT, nombre o apellido (admin y rrhh ven además la ficha personal) | todos |
 | 5 | Gestionar proyectos: crear, editar, eliminar, asignar y desasignar empleados | admin, rrhh |
 | 6 | Listar proyectos | todos |
 | 7 | Registrar horas trabajadas (los empleados, solo las propias) | todos |
@@ -242,6 +242,8 @@ Los empleados solo pueden consultar sus propias horas registradas, registrar hor
 Los submenús `Gestionar departamentos`, `Gestionar empleados` y `Gestionar proyectos` (solo `admin` y `rrhh`) agrupan el CRUD de cada entidad. Al editar, cada campo muestra su valor actual entre corchetes y Enter lo conserva; un valor inválido repite solo ese campo. Toda eliminación pide confirmación (`s/n`) e informa qué se pierde (horas registradas, cuenta de acceso, asignaciones). El gerente debe ser un empleado registrado; si ese empleado se elimina, el departamento queda sin gerente (`ON DELETE SET NULL`). `Editar o eliminar registros de tiempo` está disponible para todos los roles, pero un empleado solo ve y puede elegir sus propios registros.
 
 Al registrar horas se solicita una breve descripción de las tareas realizadas (hasta 200 caracteres), que se muestra en el listado y se incluye en los informes de texto y CSV.
+
+Las opciones de listado aceptan un texto de búsqueda opcional: coincidencia parcial, sin distinguir mayúsculas, con los comodines `%` y `_` tratados como texto (`patron_busqueda()` los escapa y la consulta usa `LIKE ... ESCAPE`). Enter lista todo.
 
 Los informes se muestran en pantalla y se guardan en `informes/` (junto a la base de datos) con nombre `informe_de_<entidad>_<fecha>_<hora>.txt|csv`. El informe de empleados omite dirección, teléfono y salario: un archivo en disco no está protegido por el cifrado en reposo de la base, y esos datos se consultan desde el sistema con el rol correspondiente.
 
@@ -318,7 +320,7 @@ Cada consulta exitosa se guarda en SQLite (`consultas_clima` e `indicadores`, co
 - Pruebas del servicio de indicadores con respuestas simuladas (serie vacía, valor no numérico, valor negativo, fecha futura, cuerpo vacío) y con una consulta real a mindicador.cl; validación de la lista blanca de indicadores; cálculo de pago con redondeo a dos decimales y rechazo de horas, tarifas o tipos de cambio no positivos; la opción de cálculo de pago está restringida a `admin` y `rrhh` y bloqueada si el empleado no tiene horas.
 - Pruebas del respaldo local: una consulta exitosa se persiste; ante error de conexión, timeout o 5xx se devuelve el último dato guardado (el más reciente si hay varios) con aviso y fecha; sin respaldo el error se propaga con mensaje limpio; el respaldo sobrevive al cierre y reapertura de la base; la lista blanca se aplica también al leer el respaldo; las opciones de clima, indicador y pago muestran el aviso de respaldo.
 - Verificación de que el menú se numera de forma consecutiva y ordenada para `admin` (1-16), `rrhh` (1-14) y `empleado`, y de que un número no visible para el rol se responde con `Opcion no valida.` sin ejecutar nada.
-- Suites `test_nucleo.py` (53) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
+- Suites `test_nucleo.py` (57) y `test_servicios_externos.py` (28) en verde; cifrado verificado sobre una copia de la base real (la fila guardada solo contiene tokens y la interfaz la muestra descifrada); migración probada además sobre una copia de la base real (2 empleados, 4 usuarios) sin pérdida de filas ni claves foráneas inválidas; consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Revisión de mantenibilidad SonarQube tras la Unidad 3: literales centralizados, `datetime` con zona horaria, sin parámetros ni `assert` sueltos en los ayudantes de prueba, complejidad cognitiva bajo el umbral, una sola llamada dentro de cada `assertRaises`, `assertAlmostEqual` para montos y `logging.exception` en los `except` donde el traceback no expone secretos.
 - Prueba de persistencia completa después de cerrar y reabrir una base SQLite temporal.
 - Verificación de que los roles `empleado` y `rrhh` quedan vinculados a una ficha en `empleados`.

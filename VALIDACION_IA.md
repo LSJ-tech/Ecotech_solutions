@@ -30,6 +30,7 @@
 26. Cambio 40 (alineación con la Unidad 1, paso 5): CRUD completo desde el menú y desasignación de proyectos.
 27. Cambio 41 (alineación con la Unidad 1, paso 6): informes de las cuatro entidades exportados a archivo.
 28. Cambio 42 (alineación con la Unidad 1, paso 7): política de contraseñas y restauración de `__all__`.
+29. Cambio 43 (alineación con la Unidad 1, paso 8): búsqueda de departamentos y empleados.
 
 ## Cambio 1 - Criterio 2.1.1 de la Unidad 2
 
@@ -1185,3 +1186,27 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 81 pruebas en verde. Las cuatro nuevas verifican que la validación acepta una contraseña válida (recortando espacios) y rechaza vacía, corta, sin dígitos, sin letras o solo espacios; que `guardar_usuario()` no persiste una contraseña débil y que `actualizar_contrasena()` la rechaza; que el menú repite la contraseña con el mensaje correspondiente hasta que cumple; y que el código secreto `1234` sigue aceptándose para registrar al administrador. Las pruebas existentes que persistían la contraseña `clave` se actualizaron a una que cumple la política.
+
+## Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas
+
+**Fecha:** 2026-09-21
+**Archivos modificados:** `main.py`, `interfaz.py`, `test_nucleo.py`
+**Objetivo:** cumplir el requisito "creación, edición, búsquedas y eliminación de departamentos" de la guía de la Unidad 1 (la búsqueda era lo único que faltaba) y ofrecer la misma búsqueda para empleados, que es la entidad con más filas.
+
+### Implementación
+
+- `listar_departamentos(connection, filtro=None)` y `listar_empleados(connection, filtro=None)` aceptan un texto opcional: departamentos por nombre; empleados por RUT, nombre o apellido. La coincidencia es parcial y sin distinguir mayúsculas (`LIKE` de SQLite). Sin filtro se comportan igual que antes, por lo que ningún flujo existente cambió.
+- `patron_busqueda()` valida el texto y escapa `\\`, `%` y `_` antes de envolverlo en `%…%`; las consultas usan `ESCAPE '\\'` para que esos caracteres se busquen literalmente.
+- Interfaz: las opciones 2 y 4 pasan a `Listar o buscar …` y piden un filtro opcional (`leer_filtro()`; Enter lista todo). Los mensajes distinguen "no hay registros" de "no hay coincidencias con 'x'". Los listados internos que preceden a pedir un RUT o un ID no piden filtro.
+
+### Revisión técnica
+
+- La IA propuso construir la cláusula `WHERE` concatenando el texto del usuario en la consulta. Se descartó por inyección SQL: el patrón viaja como parámetro y solo la estructura de la consulta se arma en código.
+- Sin escapar los comodines, buscar `%` devolvería todos los departamentos y `_` coincidiría con cualquier carácter; la prueba `test_los_comodines_de_like_se_tratan_como_texto` cubre ambos casos con un departamento llamado `100% Verde`.
+- Se evaluó buscar también por correo y cargo. Se dejó fuera para mantener el filtro predecible; agregar columnas es una línea en la consulta.
+- No se buscan dirección ni teléfono porque están cifrados con IV aleatorio: `LIKE` no puede compararlos y descifrar toda la tabla para filtrar en memoria anularía el propósito del cifrado.
+
+### Validación
+
+- `py -3 -m py_compile` y `ruff check --select F` sin errores.
+- `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).

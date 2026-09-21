@@ -623,23 +623,38 @@ def asignar_empleado_departamento_bd(
 	connection.commit()
 
 
-def listar_empleados(connection: sqlite3.Connection) -> list[dict[str, Any]]:
-	"""Devuelve los empleados con su departamento y los datos personales descifrados."""
+def patron_busqueda(texto: str) -> str:
+	"""Convierte un texto en patrón LIKE parcial, neutralizando los comodines % y _."""
 
-	return [
-		descifrar_fila_empleado(fila)
-		for fila in connection.execute(
-			"""
-			SELECT e.id_empleado, e.rut, e.nombre, e.apellido, e.correo, e.cargo,
-			       e.direccion, e.telefono, e.fecha_inicio_contrato, e.salario,
-			       d.nombre AS departamento
-			FROM empleados AS e
-			LEFT JOIN departamentos AS d
-			       ON d.id_departamento = e.id_departamento
-			ORDER BY e.apellido, e.nombre
-			"""
+	texto = validar_texto(texto, "El texto de búsqueda")
+	for comodin in ("\\", "%", "_"):
+		texto = texto.replace(comodin, "\\" + comodin)
+	return f"%{texto}%"
+
+
+def listar_empleados(
+	connection: sqlite3.Connection, filtro: str | None = None
+) -> list[dict[str, Any]]:
+	"""Devuelve los empleados (todos o los que coinciden por RUT, nombre o apellido) descifrados."""
+
+	consulta = """
+		SELECT e.id_empleado, e.rut, e.nombre, e.apellido, e.correo, e.cargo,
+		       e.direccion, e.telefono, e.fecha_inicio_contrato, e.salario,
+		       d.nombre AS departamento
+		FROM empleados AS e
+		LEFT JOIN departamentos AS d
+		       ON d.id_departamento = e.id_departamento
+	"""
+	parametros: tuple[str, ...] = ()
+	if filtro is not None and filtro.strip():
+		patron = patron_busqueda(filtro)
+		consulta += (
+			" WHERE e.rut LIKE ? ESCAPE '\\' OR e.nombre LIKE ? ESCAPE '\\'"
+			" OR e.apellido LIKE ? ESCAPE '\\'"
 		)
-	]
+		parametros = (patron, patron, patron)
+	consulta += " ORDER BY e.apellido, e.nombre"
+	return [descifrar_fila_empleado(fila) for fila in connection.execute(consulta, parametros)]
 
 
 @revertir_si_falla
@@ -733,20 +748,23 @@ def guardar_proyecto(connection: sqlite3.Connection, proyecto: Proyecto) -> int:
 	return proyecto.id_proyecto
 
 
-def listar_departamentos(connection: sqlite3.Connection) -> list[sqlite3.Row]:
-	"""Consulta todos los departamentos almacenados."""
+def listar_departamentos(
+	connection: sqlite3.Connection, filtro: str | None = None
+) -> list[sqlite3.Row]:
+	"""Consulta los departamentos, todos o los que coinciden parcialmente por nombre."""
 
-	return list(
-		connection.execute(
-			"""
-			SELECT d.id_departamento, d.nombre, d.rut_gerente,
-			       e.nombre || ' ' || e.apellido AS gerente
-			FROM departamentos AS d
-			LEFT JOIN empleados AS e ON e.rut = d.rut_gerente
-			ORDER BY d.nombre
-			"""
-		)
-	)
+	consulta = """
+		SELECT d.id_departamento, d.nombre, d.rut_gerente,
+		       e.nombre || ' ' || e.apellido AS gerente
+		FROM departamentos AS d
+		LEFT JOIN empleados AS e ON e.rut = d.rut_gerente
+	"""
+	parametros: tuple[str, ...] = ()
+	if filtro is not None and filtro.strip():
+		consulta += " WHERE d.nombre LIKE ? ESCAPE '\\'"
+		parametros = (patron_busqueda(filtro),)
+	consulta += " ORDER BY d.nombre"
+	return list(connection.execute(consulta, parametros))
 
 
 @revertir_si_falla
@@ -1617,6 +1635,7 @@ __all__ = [
 	"listar_usuarios",
 	"migrar_tabla_empleados",
 	"obtener_codigo_rol",
+	"patron_busqueda",
 	"registrar_tiempo",
 	"revertir_si_falla",
 	"sumar_horas_empleado",
