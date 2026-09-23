@@ -43,6 +43,8 @@ from main import (
 	contar_registros_proyecto,
 	desasignar_empleado_proyecto_bd,
 	fila_a_empleado,
+	generar_correo,
+	normalizar_identificador,
 	guardar_departamento,
 	guardar_proyecto,
 	guardar_registro_tiempo,
@@ -330,16 +332,6 @@ def leer_rol() -> str:
 		print("El rol debe ser admin, empleado o rrhh.")
 
 
-def leer_correo() -> str:
-	"""Solicita un correo con un formato básico válido."""
-
-	while True:
-		try:
-			return validar_correo(input("Correo: "))
-		except ValueError as error:
-			print(error)
-
-
 def generar_nombre_usuario(
 	connection: sqlite3.Connection,
 	nombre: str,
@@ -348,9 +340,11 @@ def generar_nombre_usuario(
 ) -> str:
 	"""Genera un usuario con la inicial del nombre y un apellido."""
 
-	nombre = validar_texto(nombre, "El nombre").lower()
-	primer_apellido = validar_texto(primer_apellido, "El primer apellido").lower()
-	segundo_apellido = validar_texto(segundo_apellido, "El segundo apellido").lower()
+	nombre = normalizar_identificador(validar_texto(nombre, "El nombre"))
+	primer_apellido = normalizar_identificador(validar_texto(primer_apellido, "El primer apellido"))
+	segundo_apellido = normalizar_identificador(
+		validar_texto(segundo_apellido, "El segundo apellido")
+	)
 	usuarios = {
 		fila[0]
 		for fila in connection.execute("SELECT nombre_usuario FROM usuarios")
@@ -603,11 +597,13 @@ def registrar_usuario_menu(
 	# Toda cuenta pertenece a una persona de la empresa, también las de admin:
 	# sin ficha no habría RUT que la identifique ni podría registrar sus horas.
 	rut_empleado = leer_rut()
+	# El correo es institucional y se deriva del usuario, no se pide por teclado.
+	correo = generar_correo(nombre_usuario)
 	empleado = Empleado(
 		rut_empleado,
 		nombre,
 		f"{primer_apellido} {segundo_apellido}",
-		leer_correo(),
+		correo,
 		leer_texto("Cargo: ", "El cargo"),
 		direccion=leer_texto("Direccion: ", "La dirección"),
 		telefono=leer_telefono(),
@@ -618,8 +614,10 @@ def registrar_usuario_menu(
 	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado, rol=rol)
 	guardar_usuario_con_empleado(connection, usuario, empleado)
 	print(
-		f"Usuario registrado correctamente. Su usuario es: {nombre_usuario} "
-		f"(ficha de empleado {rut_empleado})."
+		"\nUsuario registrado correctamente.\n"
+		f"  Usuario: {nombre_usuario}\n"
+		f"  Correo:  {correo}\n"
+		f"  Ficha de empleado: {rut_empleado}"
 	)
 
 

@@ -259,14 +259,16 @@ class PruebasMenuEmpleado(unittest.TestCase):
 		ui.leer_contrasena = lambda mensaje: "Clave1234"
 		salida = ejecutar_con_entradas(
 			lambda: ui.registrar_usuario_menu(self.connection),
-			["empleado", "Ana", "Perez", "Soto", RUT, "ana@x.cl", "Dev",
+			["empleado", "Ana", "Perez", "Soto", RUT, "Dev",
 			 "Av. Uno 1", "abc", "+56 9 1234 5678", "2025-03-01", "-1", "1200000"],
 		)
 		self.assertIn("El teléfono solo puede contener", salida)
 		self.assertIn("El salario debe ser un número mayor que 0.", salida)
-		self.assertIn("Su usuario es: aperez", salida)
+		self.assertIn("Usuario: aperez", salida)
+		self.assertIn("Correo:  aperez@ecotech.cl", salida)
 		leido = main.fila_a_empleado(self.connection.execute("SELECT * FROM empleados").fetchone())
 		self.assertEqual((leido.telefono, leido.salario), ("+56 9 1234 5678", 1_200_000.0))
+		self.assertEqual(leido.correo, "aperez@ecotech.cl")
 
 	def test_listado_oculta_datos_personales_a_empleados(self):
 		main.guardar_empleado(self.connection, empleado_completo())
@@ -325,26 +327,28 @@ class PruebasAcceso(unittest.TestCase):
 		salida = ejecutar_con_entradas(
 			lambda: ui.procesar_opcion_acceso(self.connection, "2", False),
 			# No se pide rol (contraseña y código vienen simulados), pero sí la ficha completa.
-			["Ana", "Perez", "Soto", RUT, "ana@x.cl", "Jefa de proyectos", "Av. Uno 1",
+			["Ana", "Perez", "Soto", RUT, "Jefa de proyectos", "Av. Uno 1",
 			 "+56 9 1234 5678", "2025-03-01", "1200000"],
 		)
 		self.assertIn("debe ser administrador", salida)
-		self.assertIn("Su usuario es: aperez", salida)
+		self.assertIn("Usuario: aperez", salida)
+		self.assertIn("Correo:  aperez@ecotech.cl", salida)
 		fila = self.connection.execute("SELECT rol, rut_empleado FROM usuarios").fetchone()
 		self.assertEqual((fila["rol"], fila["rut_empleado"]), ("admin", RUT))
 		# La cuenta admin queda vinculada a una ficha real, con su ID automático.
 		empleado = main.listar_empleados(self.connection)[0]
 		self.assertEqual((empleado["rut"], empleado["cargo"]), (RUT, "Jefa de proyectos"))
+		self.assertEqual(empleado["correo"], "aperez@ecotech.cl")
 		self.assertEqual(empleado["id_empleado"], 1)
 
 	def test_el_rut_invalido_se_repite_sin_reiniciar_el_formulario(self):
 		salida = ejecutar_con_entradas(
 			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="admin"),
-			["Ana", "Perez", "Soto", "12345678-9", RUT, "ana@x.cl", "Dev", "Av. Uno 1",
+			["Ana", "Perez", "Soto", "12345678-9", RUT, "Dev", "Av. Uno 1",
 			 "+56 9 1234 5678", "2025-03-01", "1200000"],
 		)
 		self.assertIn("dígito verificador", salida)
-		self.assertIn("Su usuario es: aperez", salida)
+		self.assertIn("Usuario: aperez", salida)
 		self.assertEqual(
 			self.connection.execute("SELECT rut_empleado FROM usuarios").fetchone()[0], RUT
 		)
@@ -761,7 +765,7 @@ class PruebasPoliticaContrasenas(unittest.TestCase):
 		ui.leer_contrasena = lambda mensaje: next(intentos)
 		salida = ejecutar_con_entradas(
 			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="empleado"),
-			["Ana", "Perez", "Soto", RUT, "ana@x.cl", "Dev", "Av. Uno 1", "+56 9 1234 5678",
+			["Ana", "Perez", "Soto", RUT, "Dev", "Av. Uno 1", "+56 9 1234 5678",
 			 "2025-03-01", "1200000"],
 		)
 		self.assertIn("8 caracteres", salida)
@@ -773,7 +777,7 @@ class PruebasPoliticaContrasenas(unittest.TestCase):
 		ui.leer_contrasena = lambda mensaje: "1234" if "Codigo" in mensaje else "Clave1234"
 		salida = ejecutar_con_entradas(
 			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="admin"),
-			["Logan", "Silva", "Jara", RUT, "logan@x.cl", "Admin", "Av. Uno 1",
+			["Logan", "Silva", "Jara", RUT, "Admin", "Av. Uno 1",
 			 "+56 9 1234 5678", "2025-03-01", "1200000"],
 		)
 		self.assertIn("lsilva", salida)
@@ -943,6 +947,54 @@ class PruebasPausaDelMenu(unittest.TestCase):
 		)
 		self.assertIn("hecho", salida)
 		self.assertEqual(salida.count("=== SUB ==="), 2)
+
+
+class PruebasCorreoInstitucional(unittest.TestCase):
+	"""El correo se deriva del nombre de usuario y no se pide por teclado."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		ui.leer_contrasena = lambda mensaje: "Clave1234"
+
+	def tearDown(self):
+		self.connection.close()
+
+	def test_el_correo_se_deriva_del_usuario(self):
+		self.assertEqual(main.generar_correo("lsilva"), "lsilva@ecotech.cl")
+		self.assertEqual(main.generar_correo("  LSilva "), "lsilva@ecotech.cl")
+		for invalido in ("", "   ", "---"):
+			with self.subTest(invalido=invalido), self.assertRaises(ValueError):
+				main.generar_correo(invalido)
+
+	def test_los_identificadores_no_llevan_tildes_ni_simbolos(self):
+		self.assertEqual(main.normalizar_identificador("Zúñiga"), "zuniga")
+		self.assertEqual(main.normalizar_identificador("de la Fuente"), "delafuente")
+		self.assertEqual(main.normalizar_identificador("O'Higgins"), "ohiggins")
+
+	def test_un_apellido_con_tilde_produce_usuario_y_correo_escribibles(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="empleado"),
+			["Matías", "Zúñiga", "Ñanco", RUT, "Ingeniero", "Bulnes 233",
+			 "+56 9 5512 7733", "2025-01-06", "2100000"],
+		)
+		self.assertIn("Usuario: mzuniga", salida)
+		self.assertIn("Correo:  mzuniga@ecotech.cl", salida)
+		empleado = main.listar_empleados(self.connection)[0]
+		self.assertEqual(empleado["correo"], "mzuniga@ecotech.cl")
+		# El nombre de la persona conserva sus tildes; solo el identificador se normaliza.
+		self.assertEqual(empleado["nombre"], "Matías")
+
+	def test_el_correo_sigue_al_usuario_cuando_hay_homonimos(self):
+		main.guardar_usuario(self.connection, main.Usuario(0, "aperez", "Clave1234", rol="admin"))
+		salida = ejecutar_con_entradas(
+			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="empleado"),
+			["Ana", "Perez", "Soto", RUT, "Dev", "Av. Uno 1", "+56 9 1234 5678",
+			 "2025-03-01", "1200000"],
+		)
+		# Con el usuario ocupado se usa el segundo apellido, y el correo lo acompaña.
+		self.assertIn("Usuario: asoto", salida)
+		self.assertIn("Correo:  asoto@ecotech.cl", salida)
 
 
 if __name__ == "__main__":

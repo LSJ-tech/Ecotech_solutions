@@ -15,6 +15,7 @@ import io
 import os
 import re
 import secrets
+import unicodedata
 import sqlite3
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -36,6 +37,8 @@ CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 LARGO_MAXIMO_DESCRIPCION_TAREA = 200
 LARGO_MINIMO_CONTRASENA = 8
 DIGITOS_RUT_VISIBLES = 4
+# Dominio institucional con el que se arma el correo de cada cuenta.
+DOMINIO_CORREO = "ecotech.cl"
 CODIFICACION = "utf-8"
 # Valor hora según la fórmula de la Dirección del Trabajo: sueldo mensual / 30 x 7 / jornada semanal.
 JORNADA_SEMANAL_HORAS = 44
@@ -182,6 +185,31 @@ def verificar_codigo_rol(rol: str, codigo: str) -> bool:
 	"""Compara el código ingresado en tiempo constante para evitar fugas por tiempo."""
 
 	return hmac.compare_digest(codigo.encode(CODIFICACION), obtener_codigo_rol(rol).encode(CODIFICACION))
+
+
+def normalizar_identificador(valor: str) -> str:
+	"""Convierte un texto en un identificador escribible: minúsculas, sin tildes ni símbolos.
+
+	Un nombre de usuario o un correo con tildes o ñ se escribe mal en un teclado
+	cualquiera y no es válido como dirección de correo, así que `Zúñiga` queda
+	como `zuniga` y `de la Fuente` como `delafuente`.
+	"""
+
+	sin_tildes = "".join(
+		caracter
+		for caracter in unicodedata.normalize("NFKD", valor)
+		if not unicodedata.combining(caracter)
+	)
+	return "".join(caracter for caracter in sin_tildes.lower() if caracter.isalnum())
+
+
+def generar_correo(nombre_usuario: str) -> str:
+	"""Deriva el correo institucional del nombre de usuario: lsilva -> lsilva@ecotech.cl."""
+
+	usuario = normalizar_identificador(validar_texto(nombre_usuario, "El nombre de usuario"))
+	if not usuario:
+		raise ValueError("El nombre de usuario no permite formar un correo válido.")
+	return f"{usuario}@{DOMINIO_CORREO}"
 
 
 def enmascarar_rut(rut: str) -> str:
@@ -1641,6 +1669,8 @@ __all__ = [
 	"fila_a_empleado",
 	"formatear_celda",
 	"generar_clave_cifrado",
+	"generar_correo",
+	"normalizar_identificador",
 	"generar_hash_contrasena",
 	"guardar_departamento",
 	"guardar_empleado",
