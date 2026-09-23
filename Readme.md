@@ -8,9 +8,9 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **100 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 29), sin red, en verde |
+| Pruebas | **104 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 29 · `tests/test_documentacion.py` 4), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 56 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
+| Trazabilidad | `VALIDACION_IA.md`: 58 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -105,7 +105,7 @@ Comportamientos que conviene conocer al probar:
 ```text
 Ecotech_solutions/
 ├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
-├── VALIDACION_IA.md                registro técnico de los 56 cambios y del uso de IA
+├── VALIDACION_IA.md                registro técnico de los 58 cambios y del uso de IA
 ├── datos_ejemplo.py                genera una base de demostración con datos ficticios
 ├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
 ├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
@@ -113,7 +113,8 @@ Ecotech_solutions/
 ├── requirements.txt · .env.example configuración
 ├── tests/
 │   ├── test_nucleo.py              71 pruebas del núcleo y de los flujos de menú
-│   └── test_servicios_externos.py  29 pruebas de los servicios externos (sin red)
+│   ├── test_servicios_externos.py  29 pruebas de los servicios externos (sin red)
+│   └── test_documentacion.py        4 pruebas que contrastan esta guía con el proyecto
 ├── docs/
 │   ├── CREDENCIALES_PRUEBA.md      cuentas, configuración y recorrido para evaluar
 │   ├── demo/ecotech_demo.db        base con datos ficticios, lista para usar
@@ -164,7 +165,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 56 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 58 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
@@ -230,6 +231,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 | Suite | Pruebas | Cubre |
 |---|---|---|
 | `tests/test_nucleo.py` | 71 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
+| `tests/test_documentacion.py` | 4 | Contrasta esta guía con el proyecto: que cada cambio de `VALIDACION_IA.md` esté en su índice y en orden, que las cifras de cambios y de pruebas citadas aquí sean las reales y que los archivos mencionados existan. |
 | `tests/test_servicios_externos.py` | 29 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.

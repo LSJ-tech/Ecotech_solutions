@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 57)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 58)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -79,6 +79,7 @@ Cómo usar este documento:
   - [Cambio 55 - El correo institucional deja de ser editable](#cambio-55---el-correo-institucional-deja-de-ser-editable)
   - [Cambio 56 - Base de demostración y credenciales de prueba](#cambio-56---base-de-demostración-y-credenciales-de-prueba)
   - [Cambio 57 - Incidencias de SonarCloud](#cambio-57---incidencias-de-sonarcloud)
+  - [Cambio 58 - Pruebas que vigilan la documentación](#cambio-58---pruebas-que-vigilan-la-documentación)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1317,7 +1318,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 57)
+## Fase 5 - Documentación y cierre (cambios 44 a 58)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1648,3 +1649,31 @@ El aviso `S1135` muestra el límite de un analizador configurado para código en
 - Consulta a la API de SonarCloud antes del cambio: 15 incidencias abiertas (1 vulnerabilidad, 14 *code smells*), 0 *bugs*, 0 *security hotspots*, 0 % de duplicación.
 - `py -3 -m ruff check --select F` sin nombres indefinidos y `py -3 -m unittest discover -s tests -t .`: 100 pruebas en verde después de los cambios.
 - `py -3 datos_ejemplo.py` con `ECOTECH_DB_PATH` regeneró la base de demostración completa (6 cuentas, 4 departamentos, 5 proyectos, 8 registros) y se volvieron a guardar los tres indicadores de respaldo.
+
+### Cambio 58 - Pruebas que vigilan la documentación
+
+**Fecha:** 2026-09-23
+**Archivo creado:** `tests/test_documentacion.py`
+**Archivos modificados:** `Readme.md`, `docs/CREDENCIALES_PRUEBA.md`
+**Objetivo:** evitar que las cifras del `Readme.md` se desactualicen. Ocurrió dos veces: quedó citando "47 cambios" cuando ya había 56, y "56 cambios" cuando ya había 57. Cada corrección fue manual y el error solo se detectó al revisarlo a mano.
+
+#### Implementación
+
+Cuatro pruebas contrastan la documentación con el proyecto, de modo que un descuido falla en la suite y no queda en la entrega:
+
+- Cada entrada `### Cambio N` de `VALIDACION_IA.md` aparece en su índice, en el mismo orden y sin saltos.
+- La cantidad de cambios que cita el `Readme.md` es la real.
+- Las cifras de pruebas por suite y el total que aparecen en el `Readme.md` coinciden con lo que informa `unittest` al cargar cada módulo, sin ejecutarlas.
+- Los archivos que el `Readme.md` menciona existen en el proyecto.
+
+#### Revisión técnica
+
+La primera versión de la prueba de archivos exigía que cada ruta citada existiera tal cual. Falló con `uml.mmd` y `uml_original_unidad1.png`, porque el árbol del proyecto los muestra indentados bajo `docs/` sin repetir el prefijo: el aviso era correcto en la forma y falso en el fondo. Se ajustó para aceptar que el archivo exista en cualquier carpeta del proyecto, que es lo que la prueba quiere comprobar —que no se cite algo inexistente— sin depender del formato del árbol.
+
+Contar las pruebas con `loadTestsFromName(...).countTestCases()` evita ejecutarlas de nuevo dentro de la propia suite. La prueba se cuenta a sí misma, de modo que agregar una obliga a actualizar el `Readme.md`, que es justamente el efecto buscado.
+
+#### Validación
+
+- Antes de corregir nada, la suite falló con tres avisos exactos: el `Readme.md` citaba 56 cambios frente a 57 registrados, le faltaba la fila de la nueva suite y decía 100 pruebas en lugar de 104. Es decir, la prueba detectó el desfase que motivó el cambio.
+- `py -3 -m unittest discover -s tests -t .`: 104 pruebas en verde tras poner al día el `Readme.md` y la guía de credenciales.
+- La prueba volvió a avisar al agregar esta misma entrada: con el cambio 58 registrado, el `Readme.md` seguía citando 57. Se corrigió y la suite quedó en verde.

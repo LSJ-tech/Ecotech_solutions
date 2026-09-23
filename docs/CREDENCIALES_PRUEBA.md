@@ -85,4 +85,4 @@ Cada punto corresponde a un criterio de la rúbrica.
 py -3 -m unittest discover -s tests -t .
 ```
 
-Son 100 pruebas y no necesitan red ni base de datos: los servicios externos se simulan y las bases se crean en memoria.
+Son 104 pruebas y no necesitan red ni base de datos: los servicios externos se simulan y las bases se crean en memoria.
