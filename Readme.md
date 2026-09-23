@@ -8,7 +8,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **94 automatizadas** (`tests/test_nucleo.py` 66 · `tests/test_servicios_externos.py` 28), sin red, en verde |
+| Pruebas | **95 automatizadas** (`tests/test_nucleo.py` 67 · `tests/test_servicios_externos.py` 28), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
 | Trazabilidad | `VALIDACION_IA.md`: 47 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
@@ -90,6 +90,7 @@ Comportamientos que conviene conocer al probar:
 
 - **RUT**: se pide con el formato `12345678-5` (cuerpo, guion y dígito verificador); el sistema normaliza puntos y espacios y rechaza un dígito verificador incorrecto. En el listado, un `empleado` ve el RUT de sus compañeros como `****5678-5` y el suyo completo.
 - **Pausa antes de volver**: tras cada opción el sistema espera un Enter (`Presione Enter para volver al menu...`), de modo que el listado, el informe o el mensaje de error se puedan leer antes de que el menú se redibuje.
+- **Los submenús se repiten**: dentro de `Gestionar …`, `Editar o eliminar registros` o `Generar informe` se pueden encadenar varias operaciones, incluso si una falla, y se vuelve al menú principal con `0. Volver`.
 - **Edición campo por campo**: cada campo muestra su valor actual `[así]`; Enter lo conserva; un valor inválido repite solo ese campo, nunca el formulario completo.
 - **Eliminaciones confirmadas** (`s/n`) e informadas: eliminar un proyecto borra sus asignaciones y horas; eliminar un empleado borra también su cuenta; un departamento con empleados no se puede eliminar; desasignar de un proyecto **conserva** las horas ya registradas.
 - **Búsqueda** parcial sin distinguir mayúsculas; `%` y `_` se tratan como texto.
@@ -107,7 +108,7 @@ Ecotech_solutions/
 ├── interfaz.py                     consola: menús, lectura validada de entradas, permisos por rol
 ├── requirements.txt · .env.example configuración
 ├── tests/
-│   ├── test_nucleo.py              66 pruebas del núcleo y de los flujos de menú
+│   ├── test_nucleo.py              67 pruebas del núcleo y de los flujos de menú
 │   └── test_servicios_externos.py  28 pruebas de los servicios externos (sin red)
 ├── docs/
 │   ├── uml.mmd · uml.png           modelo vigente: diagrama de clases (Mermaid y su render)
@@ -222,7 +223,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 
 | Suite | Pruebas | Cubre |
 |---|---|---|
-| `tests/test_nucleo.py` | 66 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
+| `tests/test_nucleo.py` | 67 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
 | `tests/test_servicios_externos.py` | 28 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.

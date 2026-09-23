@@ -92,6 +92,8 @@ MENSAJE_DEPARTAMENTO_INEXISTENTE = "El departamento indicado no existe."
 MENSAJE_ENTER_CONSERVA = "Enter conserva el valor actual."
 MENSAJE_CANCELADO = "Operacion cancelada."
 MENSAJE_VOLVER = "\nPresione Enter para volver al menu... "
+# Errores previstos de una operacion: se informan sin cortar la sesion.
+ERRORES_ESPERADOS = (ValueError, PermissionError, sqlite3.Error, ErrorServicioExterno)
 CARPETA_INFORMES = DATABASE_PATH.with_name("informes")
 ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = "SELECT * FROM empleados WHERE rut = ?"
@@ -457,8 +459,27 @@ def obtener_departamento(connection: sqlite3.Connection, id_departamento: int) -
 	raise ValueError(MENSAJE_DEPARTAMENTO_INEXISTENTE)
 
 
-def ejecutar_submenu(titulo: str, opciones: list[OpcionMenu]) -> None:
-	"""Muestra un submenú, ejecuta la opción elegida y vuelve; 0 vuelve sin hacer nada."""
+def ejecutar_accion(accion: Callable[[], Any]) -> None:
+	"""Ejecuta una acción del menú, informa los errores previstos y espera antes de volver.
+
+	Una acción que ya mostró su propia pausa (un submenú) devuelve un valor
+	verdadero, para no pedir Enter dos veces al encadenarse.
+	"""
+
+	try:
+		if not accion():
+			pausar()
+	except ERRORES_ESPERADOS as error:
+		print(f"No se pudo completar la operacion: {error}")
+		pausar()
+
+
+def ejecutar_submenu(titulo: str, opciones: list[OpcionMenu]) -> bool:
+	"""Muestra un submenú y lo repite hasta que se elija `0. Volver`.
+
+	Devuelve True para avisar a quien lo invocó que este submenú ya pausó
+	después de cada acción.
+	"""
 
 	acciones = {numero: accion for numero, _texto, accion in opciones}
 	while True:
@@ -468,11 +489,11 @@ def ejecutar_submenu(titulo: str, opciones: list[OpcionMenu]) -> None:
 		print("0. Volver")
 		opcion = input(MENSAJE_SELECCION).strip()
 		if opcion == "0":
-			return
-		if opcion in acciones:
-			acciones[opcion]()
-			return
-		print(MENSAJE_OPCION_INVALIDA)
+			return True
+		if opcion not in acciones:
+			print(MENSAJE_OPCION_INVALIDA)
+			continue
+		ejecutar_accion(acciones[opcion])
 
 
 def consultar_clima_menu(connection: sqlite3.Connection) -> None:
@@ -929,11 +950,11 @@ def eliminar_departamento_menu(connection: sqlite3.Connection) -> None:
 
 def gestionar_departamento_menu(
 	connection: sqlite3.Connection, usuario_actual: Usuario
-) -> None:
+) -> bool:
 	"""Muestra las opciones para asignar o cambiar el departamento de un empleado."""
 
 	verificar_gestion(usuario_actual, "gestionar departamentos")
-	ejecutar_submenu(
+	return ejecutar_submenu(
 		"GESTIONAR DEPARTAMENTO DE EMPLEADO",
 		[
 			("1", "Asignar departamento",
@@ -946,11 +967,11 @@ def gestionar_departamento_menu(
 
 def gestionar_departamentos_menu(
 	connection: sqlite3.Connection, usuario_actual: Usuario
-) -> None:
+) -> bool:
 	"""Muestra las opciones de creación, edición, eliminación y gestión de departamentos."""
 
 	verificar_gestion(usuario_actual, "gestionar departamentos")
-	ejecutar_submenu(
+	return ejecutar_submenu(
 		"GESTIONAR DEPARTAMENTOS",
 		[
 			("1", "Crear departamento", lambda: crear_departamento_menu(connection)),
@@ -1020,11 +1041,11 @@ def eliminar_empleado_menu(connection: sqlite3.Connection, usuario_actual: Usuar
 	print("Empleado eliminado correctamente.")
 
 
-def gestionar_empleados_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+def gestionar_empleados_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> bool:
 	"""Muestra las opciones de edición y eliminación de empleados."""
 
 	verificar_gestion(usuario_actual, "gestionar empleados")
-	ejecutar_submenu(
+	return ejecutar_submenu(
 		"GESTIONAR EMPLEADOS",
 		[
 			("1", "Editar ficha de empleado", lambda: editar_empleado_menu(connection)),
@@ -1139,11 +1160,11 @@ def desasignar_proyecto_menu(connection: sqlite3.Connection) -> None:
 	print("Empleado desasignado del proyecto; sus horas registradas se conservan.")
 
 
-def gestionar_proyectos_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+def gestionar_proyectos_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> bool:
 	"""Muestra las opciones de creación, edición, eliminación y asignación de proyectos."""
 
 	verificar_gestion(usuario_actual, "gestionar proyectos")
-	ejecutar_submenu(
+	return ejecutar_submenu(
 		"GESTIONAR PROYECTOS",
 		[
 			("1", "Crear proyecto", lambda: crear_proyecto_menu(connection, usuario_actual)),
@@ -1229,13 +1250,13 @@ def informe_registros_menu(connection: sqlite3.Connection, usuario_actual: Usuar
 
 def mostrar_reportes_menu(
 	connection: sqlite3.Connection, usuario_actual: Usuario
-) -> None:
+) -> bool | None:
 	"""Genera y guarda el informe de la entidad elegida; los empleados solo el de sus horas."""
 
 	if usuario_actual.rol not in ROLES_GESTION:
 		informe_registros_menu(connection, usuario_actual)
 		return
-	ejecutar_submenu(
+	return ejecutar_submenu(
 		"GENERAR INFORME",
 		[
 			("1", "Horas trabajadas", lambda: informe_registros_menu(connection, usuario_actual)),
@@ -1362,10 +1383,10 @@ def eliminar_registro_menu(connection: sqlite3.Connection, usuario_actual: Usuar
 	print("Registro eliminado correctamente.")
 
 
-def gestionar_registros_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+def gestionar_registros_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> bool:
 	"""Muestra las opciones de edición y eliminación de registros de tiempo."""
 
-	ejecutar_submenu(
+	return ejecutar_submenu(
 		"EDITAR O ELIMINAR REGISTROS DE TIEMPO",
 		[
 			("1", "Editar registro", lambda: editar_registro_menu(connection, usuario_actual)),
@@ -1441,8 +1462,7 @@ def ejecutar_opcion_menu(opciones: list[OpcionMenu], opcion: str) -> bool:
 	if accion is None:
 		print(MENSAJE_OPCION_INVALIDA)
 		return True
-	accion()
-	pausar()
+	ejecutar_accion(accion)
 	return True
 
 
@@ -1475,17 +1495,8 @@ def mostrar_menu() -> None:
 		while True:
 			mostrar_opciones_menu(opciones)
 			opcion = input(MENSAJE_SELECCION).strip()
-			try:
-				if not ejecutar_opcion_menu(opciones, opcion):
-					break
-			except (
-				ValueError,
-				PermissionError,
-				sqlite3.Error,
-				ErrorServicioExterno,
-			) as error:
-				print(f"No se pudo completar la operacion: {error}")
-				pausar()
+			if not ejecutar_opcion_menu(opciones, opcion):
+				break
 	except (EOFError, KeyboardInterrupt):
 		print("\nSesion finalizada por el usuario.")
 	finally:

@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 51)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 52)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -73,6 +73,7 @@ Cómo usar este documento:
   - [Cambio 49 - RUT de ejemplo genérico en la interfaz](#cambio-49---rut-de-ejemplo-genérico-en-la-interfaz)
   - [Cambio 50 - Enmascarado del RUT para roles sin gestión](#cambio-50---enmascarado-del-rut-para-roles-sin-gestión)
   - [Cambio 51 - Pausa antes de volver al menú](#cambio-51---pausa-antes-de-volver-al-menú)
+  - [Cambio 52 - Submenús que se repiten hasta volver](#cambio-52---submenús-que-se-repiten-hasta-volver)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1311,7 +1312,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 51)
+## Fase 5 - Documentación y cierre (cambios 44 a 52)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1487,3 +1488,25 @@ Se evaluó pausar dentro de cada función de listado. Se descartó: habría que 
 
 - `py -3 -m unittest discover -s tests -t .`: 94 pruebas en verde. Las dos nuevas verifican que tras ejecutar una opción se pide exactamente una tecla con el mensaje correspondiente y que el resultado impreso sigue presente, y que salir con `0` o escribir una opción inválida no pausa.
 - Prueba manual con la cuenta `mmorales` sobre una copia de la base: el listado de proyectos permanece visible hasta presionar Enter.
+
+### Cambio 52 - Submenús que se repiten hasta volver
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`
+**Objetivo:** completar la mejora de usabilidad del cambio anterior. Un submenú ejecutaba una sola acción y devolvía al menú principal, de modo que crear dos departamentos seguidos obligaba a recorrer el menú dos veces; y si la acción fallaba, el error expulsaba del submenú.
+
+#### Implementación
+
+- `ejecutar_submenu()` ya no retorna después de ejecutar una opción: se repite hasta que se elija `0. Volver`.
+- `ejecutar_accion()` concentra lo que antes estaba disperso: ejecuta la acción, informa los errores previstos (`ERRORES_ESPERADOS`, ahora una constante) y decide la pausa. Lo usan tanto el menú principal como los submenús, así que un error dentro de un submenú se informa y deja a la persona en el mismo submenú.
+- Para no pedir Enter dos veces al volver, `ejecutar_submenu()` devuelve `True` ("ya pausé") y `ejecutar_accion()` solo pausa cuando la acción devuelve un valor falso. Las funciones `gestionar_*_menu()` y `mostrar_reportes_menu()` propagan ese valor.
+- `mostrar_menu()` pierde su bloque `try/except` de errores de operación, que quedó dentro de `ejecutar_accion()`; conserva el de `EOFError`/`KeyboardInterrupt`, que cierra la sesión.
+
+#### Revisión técnica
+
+La alternativa era pausar dentro de cada submenú sin avisar al llamador, lo que pedía dos Enter al volver al menú principal. También se evaluó un indicador global de "ya se pausó": se descartó por introducir estado mutable compartido, difícil de probar. El valor de retorno es explícito, se prueba con entradas contadas y no obliga a tocar las acciones normales, que siguen devolviendo `None`.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 95 pruebas en verde. La prueba del submenú ahora encadena dos acciones y comprueba que el título se vuelve a dibujar después de cada una; la nueva prueba entrega exactamente tres entradas (acción, pausa y volver) para verificar que no se pide un cuarto Enter.
+- Prueba manual con la cuenta `cfuentes`: se crea un departamento, se intenta eliminar uno con empleados (el error se informa) y en ambos casos se continúa en `GESTIONAR DEPARTAMENTOS` hasta elegir `0`.

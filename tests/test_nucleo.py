@@ -626,19 +626,20 @@ class PruebasCrudCompleto(unittest.TestCase):
 		self.assertIn("eliminado", salida)
 		self.assertEqual(self._contar("registros_tiempo"), 1)
 
-	def test_submenu_vuelve_con_cero_y_rechaza_opciones_invalidas(self):
+	def test_submenu_se_repite_hasta_volver_con_cero(self):
 		llamadas = []
 		salida = ejecutar_con_entradas(
 			lambda: ui.ejecutar_submenu("PRUEBA", [("1", "Accion", lambda: llamadas.append(1))]),
-			["9", "1"],
+			["9", "1", "", "1", "", "0"],  # invalida, accion, Enter, accion, Enter, volver
 		)
+		self.assertEqual(salida.count("=== PRUEBA ==="), 4)  # se vuelve a dibujar tras cada accion
+		self.assertEqual(llamadas, [1, 1])
 		self.assertIn("Opcion no valida", salida)
-		self.assertEqual(llamadas, [1])
 		ejecutar_con_entradas(
 			lambda: ui.ejecutar_submenu("PRUEBA", [("1", "Accion", lambda: llamadas.append(2))]),
 			["0"],
 		)
-		self.assertEqual(llamadas, [1])
+		self.assertEqual(llamadas, [1, 1])  # con 0 no se ejecuta nada
 
 	def test_menu_principal_agrupa_crud_por_entidad(self):
 		gestion = [texto for _n, texto, _a in ui.construir_opciones_menu(self.connection, self.admin)]
@@ -718,7 +719,8 @@ class PruebasInformes(unittest.TestCase):
 		self.assertFalse(self.carpeta.exists())
 		# Gestión elige la entidad y el formato; una opción de formato inválida se repite.
 		salida = ejecutar_con_entradas(
-			lambda: ui.mostrar_reportes_menu(self.connection, self.admin), ["3", "9", "1"]
+			lambda: ui.mostrar_reportes_menu(self.connection, self.admin),
+			["3", "9", "1", "", "0"],  # entidad, formato invalido, formato, Enter, volver
 		)
 		self.assertIn("Opcion no valida", salida)
 		self.assertIn("Informe de departamentos", salida)
@@ -929,6 +931,18 @@ class PruebasPausaDelMenu(unittest.TestCase):
 		self.assertTrue(continuar)
 		self.assertIn("Opcion no valida", salida)
 		self.assertEqual(pedidos, [])
+
+	def test_el_submenu_no_pide_enter_dos_veces_al_volver(self):
+		opciones = [(
+			"1", "Sub",
+			lambda: ui.ejecutar_submenu("SUB", [("1", "Accion", lambda: print("hecho"))]),
+		)]
+		# Solo tres entradas: accion, su pausa y volver. Una cuarta significaria pausa doble.
+		salida = ejecutar_con_entradas(
+			lambda: ui.ejecutar_opcion_menu(opciones, "1"), ["1", "", "0"]
+		)
+		self.assertIn("hecho", salida)
+		self.assertEqual(salida.count("=== SUB ==="), 2)
 
 
 if __name__ == "__main__":
