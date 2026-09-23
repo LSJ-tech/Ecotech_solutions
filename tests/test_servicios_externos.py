@@ -79,6 +79,21 @@ def servicio_clima(**kwargs):
 	return se.ServicioClima(cliente=cliente, llave=LLAVE_PRUEBA)
 
 
+def servicio_clima_publico(geo=None, clima=None):
+	"""Arma el servicio sin llave con dos sesiones simuladas: geocodificacion y clima."""
+
+	geo = geo if geo is not None else {"results": [{"name": "Temuco", "latitude": -38.7, "longitude": -72.6}]}
+	clima = clima if clima is not None else {
+		"current": {"temperature_2m": 10.9, "relative_humidity_2m": 97, "weather_code": 53}
+	}
+	return se.ServicioClimaPublico(
+		cliente=se.ClienteHTTP(se.ServicioClimaPublico.URL_BASE, sesion=sesion_simulada(json=clima)),
+		geocodificador=se.ClienteHTTP(
+			se.ServicioClimaPublico.URL_GEOCODIFICACION, sesion=sesion_simulada(json=geo)
+		),
+	)
+
+
 def servicio_indicadores(**kwargs):
 	cliente = se.ClienteHTTP(se.ServicioIndicadores.URL_BASE, sesion=sesion_simulada(**kwargs))
 	return se.ServicioIndicadores(cliente=cliente)
@@ -290,6 +305,76 @@ class PruebasTiempoDeEspera(unittest.TestCase):
 		self.assertGreater(se.TIMEOUT_INDICADORES, se.TIMEOUT_SEGUNDOS)
 		self.assertEqual(se.ServicioIndicadores()._cliente._timeout, se.TIMEOUT_INDICADORES)
 		self.assertEqual(se.ServicioClima(llave="x")._cliente._timeout, se.TIMEOUT_SEGUNDOS)
+
+
+class PruebasServicioClimaPublico(unittest.TestCase):
+	"""Open-Meteo: sin llave, con geocodificacion previa y codigos WMO."""
+
+	def test_consulta_resuelve_la_ciudad_y_traduce_el_codigo(self):
+		clima = servicio_clima_publico().consultar("Temuco")
+		self.assertEqual(clima.ciudad, "Temuco")
+		self.assertEqual((clima.temperatura, clima.humedad), (10.9, 97))
+		self.assertEqual(clima.descripcion, "llovizna moderada")
+
+	def test_no_exige_llave(self):
+		original = os.environ.pop(se.ServicioClima.VARIABLE_LLAVE, None)
+		try:
+			se.ServicioClimaPublico()  # no debe lanzar
+		finally:
+			if original is not None:
+				os.environ[se.ServicioClima.VARIABLE_LLAVE] = original
+
+	def test_ciudad_sin_coordenadas_se_informa_sin_detalles(self):
+		servicio = servicio_clima_publico(geo={"results": []})
+		with self.assertRaises(se.ErrorServicioExterno) as contexto:
+			servicio.consultar("Atlantida")
+		self.assertIn("No se encontró la ciudad", str(contexto.exception))
+
+	def test_respuesta_incompleta_o_fuera_de_rango_se_rechaza(self):
+		casos = [
+			{"current": {"temperature_2m": 10.9, "relative_humidity_2m": 97}},      # sin codigo
+			{"current": {"temperature_2m": "x", "relative_humidity_2m": 97, "weather_code": 0}},
+			{"current": {"temperature_2m": 120, "relative_humidity_2m": 97, "weather_code": 0}},
+			{"current": {"temperature_2m": 10.9, "relative_humidity_2m": 150, "weather_code": 0}},
+			{},
+		]
+		for clima in casos:
+			with self.subTest(clima=clima):
+				servicio = servicio_clima_publico(clima=clima)
+				with self.assertRaises(se.ErrorServicioExterno):
+					servicio.consultar("Temuco")
+
+	def test_codigos_wmo_conocidos_desconocidos_y_por_grupo(self):
+		self.assertEqual(se.describir_tiempo(0), "cielo despejado")
+		self.assertEqual(se.describir_tiempo(95), "tormenta electrica")
+		# 57 no esta en la tabla: cae en su grupo de decena (51..55, llovizna).
+		self.assertEqual(se.describir_tiempo(57), "llovizna ligera")
+		self.assertEqual(se.describir_tiempo(999), "condicion no informada")
+
+	def test_se_elige_el_servicio_segun_haya_llave(self):
+		original = os.environ.get(se.ServicioClima.VARIABLE_LLAVE)
+		try:
+			os.environ[se.ServicioClima.VARIABLE_LLAVE] = ""
+			self.assertIsInstance(se.obtener_servicio_clima(), se.ServicioClimaPublico)
+			os.environ[se.ServicioClima.VARIABLE_LLAVE] = LLAVE_PRUEBA
+			self.assertIsInstance(se.obtener_servicio_clima(), se.ServicioClima)
+		finally:
+			if original is None:
+				os.environ.pop(se.ServicioClima.VARIABLE_LLAVE, None)
+			else:
+				os.environ[se.ServicioClima.VARIABLE_LLAVE] = original
+
+	def test_el_registro_tecnico_no_expone_la_ciudad_ni_datos_del_usuario(self):
+		servicio = servicio_clima_publico(geo={"results": []})
+		logger = logging.getLogger("ecotech.servicios")   # la suite lo desactiva por defecto
+		logger.disabled = False
+		try:
+			with self.assertLogs(logger, level="WARNING") as registro:
+				with self.assertRaises(se.ErrorServicioExterno):
+					servicio.consultar("Temuco")
+		finally:
+			logger.disabled = True
+		self.assertNotIn("Temuco", chr(10).join(registro.output))
 
 
 if __name__ == "__main__":

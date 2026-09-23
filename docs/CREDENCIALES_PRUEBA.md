@@ -24,7 +24,7 @@ Qué contiene esa configuración:
 | `ECOTECH_CODIGO_RRHH` | `12345` | Ídem para una cuenta `rrhh` |
 | `ECOTECH_DB_PATH` | `docs/demo/ecotech_demo.db` | La base de demostración incluida en el repositorio |
 | `ECOTECH_CLAVE_CIFRADO` | `AF5eSoRH_Oxn…` | Clave Fernet con la que está cifrada esa base |
-| `OPENWEATHER_API_KEY` | (vacía) | Se entrega junto al informe: es una credencial personal. Sin ella el sistema funciona igual; solo la consulta de clima avisa que no está configurada. Los indicadores económicos (opción 12) no necesitan llave |
+| `OPENWEATHER_API_KEY` | (vacía) | Credencial personal, no se publica. **No hace falta**: sin ella la consulta de clima usa Open-Meteo, que no exige llave ni registro, y entrega los mismos datos. Los indicadores económicos (opción 12) tampoco necesitan llave |
 
 Si se prefiere partir de cero, `copy .env.example .env` deja el archivo vacío para completarlo a mano.
 
@@ -55,7 +55,7 @@ Los códigos `1234` y `12345` se solicitan al **crear** una cuenta `admin` o `rr
 - **4 departamentos**: Desarrollo Sostenible, Investigación y Desarrollo, Recursos Humanos y Ventas (este último sin gerente ni empleados, a propósito).
 - **5 proyectos** con ciudad chilena, para consultar el clima: Calama, Temuco, Santiago, Valparaíso y Concepción.
 - **8 registros de horas** con su descripción de tarea.
-- **3 indicadores económicos** guardados como respaldo local (dólar, euro y UF del 2026-09-23), de modo que la opción 12 responde aunque el servicio externo falle.
+- **3 indicadores económicos** y **el clima de las cinco ciudades** guardados como respaldo local (2026-09-23), de modo que las opciones 11 y 12 responden aunque el servicio externo falle.
 
 ## 4. Recorrido sugerido
 
@@ -71,7 +71,7 @@ Cada punto corresponde a un criterio de la rúbrica.
 | Cifrado en reposo | Abrir `docs/demo/ecotech_demo.db` con cualquier visor SQLite: las columnas `direccion`, `telefono` y `salario` contienen tokens `gAAAAA…` | 3.1.2 |
 | Enmascarado del RUT | Con `mmorales`, opción 4: su RUT aparece completo y los de sus compañeros como `****4531-4` | 3.1.2 |
 | Informes exportados | Con `lsilva`, opción 10: elegir entidad y formato; el archivo queda en `informes/` | 2.1.2 |
-| Consumo de API | Opción 12 (indicador económico) y, con llave configurada, opción 11 (clima de un proyecto) | 3.1.1 |
+| Consumo de API | Opción 11 (clima del proyecto, vía Open-Meteo sin llave) y opción 12 (indicador económico) | 3.1.1 |
 | Continuidad ante fallos | Desconectar la red y repetir la opción 12: se muestra el último valor guardado con su fecha y un aviso | 3.1.3 |
 | Cálculo con datos externos | Con `lsilva`, opción 13, RUT `12873094-K`: convierte 14 horas a dólar o euro | 3.1.1 |
 
@@ -81,4 +81,4 @@ Cada punto corresponde a un criterio de la rúbrica.
 py -3 -m unittest discover -s tests -t .
 ```
 
-Son 104 pruebas y no necesitan red ni base de datos: los servicios externos se simulan y las bases se crean en memoria.
+Son 111 pruebas y no necesitan red ni base de datos: los servicios externos se simulan y las bases se crean en memoria.

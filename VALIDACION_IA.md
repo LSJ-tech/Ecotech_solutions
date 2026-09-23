@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 59)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 60)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -81,6 +81,7 @@ Cómo usar este documento:
   - [Cambio 57 - Incidencias de SonarCloud](#cambio-57---incidencias-de-sonarcloud)
   - [Cambio 58 - Pruebas que vigilan la documentación](#cambio-58---pruebas-que-vigilan-la-documentación)
   - [Cambio 59 - Arranque en un comando tras clonar](#cambio-59---arranque-en-un-comando-tras-clonar)
+  - [Cambio 60 - Servicio de clima sin llave](#cambio-60---servicio-de-clima-sin-llave)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1319,7 +1320,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 59)
+## Fase 5 - Documentación y cierre (cambios 44 a 60)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1704,3 +1705,31 @@ La clave publicada aquí es la misma que ya aparece en `docs/CREDENCIALES_PRUEBA
 
 - Clonado limpio desde GitHub, `copy .env.demo .env` y ejecución: el sistema inicia sesión con las cuentas de la guía y muestra los seis empleados, los cuatro departamentos y los cinco proyectos con sus datos personales descifrados.
 - `py -3 -m unittest discover -s tests -t .`: 104 pruebas en verde.
+
+### Cambio 60 - Servicio de clima sin llave
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `servicios_externos.py`, `interfaz.py`, `tests/test_servicios_externos.py`, `.env.demo`, `Readme.md`, `docs/CREDENCIALES_PRUEBA.md`
+**Objetivo:** que la consulta de clima funcione al clonar el repositorio sin entregar ni publicar ninguna credencial. OpenWeatherMap exige una llave personal, de modo que quien clonara el proyecto veía esa única opción sin operar.
+
+#### Alternativa evaluada y descartada
+
+La primera idea fue publicar la llave en `.env.demo`. Se descartó por tres razones: quedaría en el historial de git de forma permanente, GitHub y OpenWeatherMap detectan y revocan llaves publicadas —lo que dejaría la opción caída justo durante la evaluación—, y el criterio 3.1.2 evalúa precisamente que no haya credenciales en el repositorio.
+
+#### Implementación
+
+- `ServicioClimaPublico` implementa `IServicioExterno` sobre **Open-Meteo**, que no exige llave ni registro. Como trabaja con coordenadas, primero resuelve el nombre de la ciudad con la API de geocodificación del mismo proveedor: dos peticiones encadenadas, ambas por el mismo `ClienteHTTP` con su timeout, reintento, límite de tamaño y traducción de errores.
+- Open-Meteo informa el estado del tiempo como código WMO en lugar de texto. `describir_tiempo()` lo traduce con la tabla `CODIGOS_TIEMPO`; un código no listado cae en su grupo de decena (57, llovizna densa, se describe como llovizna) y uno desconocido devuelve "condicion no informada" en vez de fallar.
+- `obtener_servicio_clima()` decide: con `OPENWEATHER_API_KEY` definida usa `ServicioClima`; sin ella, `ServicioClimaPublico`. La interfaz llama a esa función, de modo que el menú no sabe cuál de los dos servicios está usando.
+- La base de demostración incorpora además el clima real de las cinco ciudades de los proyectos como respaldo local, así la opción responde incluso sin conexión.
+
+#### Revisión técnica
+
+Se evaluó reemplazar OpenWeatherMap por Open-Meteo. Se prefirió conservar ambos: el servicio con llave sigue siendo la evidencia de autenticación ante un servicio externo y de manejo de secretos en `.env` (criterio 3.1.2), y el servicio sin llave hace que el sistema funcione recién clonado. Tener dos implementaciones de `IServicioExterno` que el resto del código usa sin distinguirlas es, además, polimorfismo real y no un ejemplo de manual.
+
+La validación de la respuesta se escribió aparte y no reutilizando la de OpenWeatherMap: los formatos no se parecen (`current.temperature_2m` frente a `main.temp`) y forzar una función común habría obligado a un traductor intermedio más difícil de leer que las dos funciones separadas.
+
+#### Validación
+
+- Consulta real a Open-Meteo sin llave configurada: Calama 21,2 °C con cielo despejado, Temuco 10,9 °C con llovizna moderada y Valparaíso 17,7 °C nublado, en menos de un segundo por petición. Contrastado con OpenWeatherMap para Temuco (10,9 °C, 95 % de humedad) en la misma franja horaria.
+- `py -3 -m unittest discover -s tests -t .`: 111 pruebas en verde. Las siete nuevas cubren la consulta completa con geocodificación simulada, que el servicio no exija llave, la ciudad sin coordenadas, cinco formas de respuesta inválida o fuera de rango, los códigos WMO conocidos, agrupados y desconocidos, la elección automática de servicio según la llave, y que el registro técnico no escriba la ciudad consultada.

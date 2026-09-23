@@ -76,7 +76,7 @@ from servicios_externos import (
 	INDICADORES_PERMITIDOS,
 	ErrorServicioExterno,
 	ResultadoConsulta,
-	ServicioClima,
+	obtener_servicio_clima,
 	ServicioIndicadores,
 	consultar_con_respaldo,
 	validar_ciudad,
@@ -490,7 +490,7 @@ def consultar_clima_menu(connection: sqlite3.Connection) -> None:
 	fila = obtener_proyecto(connection, leer_entero(MENSAJE_ID_PROYECTO))
 	if not fila["ciudad"]:
 		raise ValueError("El proyecto no tiene una ciudad asignada.")
-	resultado = consultar_con_respaldo(connection, ServicioClima(), fila["ciudad"])
+	resultado = consultar_con_respaldo(connection, obtener_servicio_clima(), fila["ciudad"])
 	avisar_respaldo(resultado)
 	clima = resultado.dato
 	print(

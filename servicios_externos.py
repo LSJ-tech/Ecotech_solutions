@@ -26,6 +26,37 @@ REINTENTOS_SERVIDOR = 1
 MAX_BYTES_RESPUESTA = 1_000_000
 MENSAJE_RESPUESTA_INVALIDA = "La respuesta del servicio externo no tiene el formato esperado."
 PATRON_CIUDAD = re.compile(r"[A-Za-zÁÉÍÓÚÑáéíóúñü' -]{2,60}")
+# Open-Meteo informa el estado del tiempo como codigo WMO; esta tabla lo traduce.
+# Los codigos que no aparecen se agrupan por decena (51..57 = llovizna, etc.).
+CODIGOS_TIEMPO = {
+	0: "cielo despejado",
+	1: "mayormente despejado",
+	2: "parcialmente nublado",
+	3: "nublado",
+	45: "niebla",
+	48: "niebla con escarcha",
+	51: "llovizna ligera",
+	53: "llovizna moderada",
+	55: "llovizna intensa",
+	61: "lluvia ligera",
+	63: "lluvia moderada",
+	65: "lluvia intensa",
+	66: "lluvia helada ligera",
+	67: "lluvia helada intensa",
+	71: "nevada ligera",
+	73: "nevada moderada",
+	75: "nevada intensa",
+	77: "granos de nieve",
+	80: "chubascos ligeros",
+	81: "chubascos moderados",
+	82: "chubascos violentos",
+	85: "chubascos de nieve ligeros",
+	86: "chubascos de nieve intensos",
+	95: "tormenta electrica",
+	96: "tormenta con granizo ligero",
+	99: "tormenta con granizo intenso",
+}
+
 # Indicadores de mindicador.cl permitidos y la moneda que representan.
 INDICADORES_PERMITIDOS = {"dolar": "USD", "euro": "EUR", "uf": "UF"}
 
@@ -201,6 +232,101 @@ class ServicioClima(IServicioExterno):
 			descripcion=descripcion,
 			fecha_consulta=datetime.now().astimezone(),
 		)
+
+
+class ServicioClimaPublico(IServicioExterno):
+	"""Consulta el clima en Open-Meteo, que no exige llave ni registro.
+
+	Necesita coordenadas, así que primero resuelve el nombre de la ciudad con la
+	API de geocodificación del mismo proveedor: son dos peticiones encadenadas.
+	"""
+
+	URL_BASE = "https://api.open-meteo.com/v1"
+	URL_GEOCODIFICACION = "https://geocoding-api.open-meteo.com/v1"
+	PAIS = "CL"
+
+	def __init__(
+		self,
+		cliente: ClienteHTTP | None = None,
+		geocodificador: ClienteHTTP | None = None,
+	) -> None:
+		self._cliente = cliente or ClienteHTTP(self.URL_BASE)
+		self._geocodificador = geocodificador or ClienteHTTP(self.URL_GEOCODIFICACION)
+
+	def consultar(self, criterio: str) -> Clima:
+		ciudad = validar_ciudad(criterio)
+		nombre, latitud, longitud = self._ubicar(ciudad)
+		datos = self._cliente.obtener_json(
+			"forecast",
+			{
+				"latitude": latitud,
+				"longitude": longitud,
+				"current": "temperature_2m,relative_humidity_2m,weather_code",
+				"timezone": "auto",
+			},
+		)
+		return self._interpretar(nombre, datos)
+
+	def _ubicar(self, ciudad: str) -> tuple[str, float, float]:
+		"""Traduce el nombre de la ciudad a coordenadas."""
+
+		datos = self._geocodificador.obtener_json(
+			"search", {"name": ciudad, "count": 1, "language": "es", "country": self.PAIS}
+		)
+		try:
+			sitio = datos["results"][0]
+			return str(sitio["name"]), float(sitio["latitude"]), float(sitio["longitude"])
+		except (KeyError, IndexError, TypeError, ValueError) as error:
+			LOGGER.warning("Sin coordenadas para la ciudad consultada")
+			raise ErrorServicioExterno(
+				"No se encontró la ciudad indicada en el servicio de clima."
+			) from error
+
+	@staticmethod
+	def _interpretar(ciudad: str, datos: dict[str, Any]) -> Clima:
+		"""Extrae y valida los campos usados; cualquier ausencia o tipo erróneo se rechaza."""
+
+		try:
+			actual = datos["current"]
+			temperatura = float(actual["temperature_2m"])
+			humedad = int(actual["relative_humidity_2m"])
+			codigo = int(actual["weather_code"])
+		except (KeyError, TypeError, ValueError) as error:
+			LOGGER.exception("Clima con formato inesperado para %s", ciudad)
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA) from error
+		if not -90 <= temperatura <= 60 or not 0 <= humedad <= 100:
+			raise ErrorServicioExterno(MENSAJE_RESPUESTA_INVALIDA)
+		return Clima(
+			ciudad=ciudad,
+			temperatura=temperatura,
+			humedad=humedad,
+			descripcion=describir_tiempo(codigo),
+			fecha_consulta=datetime.now().astimezone(),
+		)
+
+
+def describir_tiempo(codigo: int) -> str:
+	"""Traduce un código WMO a texto; uno desconocido cae en su grupo de decena."""
+
+	if codigo in CODIGOS_TIEMPO:
+		return CODIGOS_TIEMPO[codigo]
+	grupo = min(
+		(c for c in CODIGOS_TIEMPO if c // 10 == codigo // 10), default=None
+	)
+	return CODIGOS_TIEMPO[grupo] if grupo is not None else "condicion no informada"
+
+
+def obtener_servicio_clima() -> IServicioExterno:
+	"""Devuelve el servicio de clima configurado.
+
+	Con `OPENWEATHER_API_KEY` definida usa OpenWeatherMap; sin ella recurre a
+	Open-Meteo, que no exige llave, de modo que el sistema funciona recién
+	clonado sin publicar ninguna credencial.
+	"""
+
+	if os.environ.get(ServicioClima.VARIABLE_LLAVE, "").strip():
+		return ServicioClima()
+	return ServicioClimaPublico()
 
 
 @dataclass(frozen=True)
@@ -397,6 +523,9 @@ __all__ = [
 	"IServicioExterno",
 	"Indicador",
 	"ServicioClima",
+	"ServicioClimaPublico",
+	"describir_tiempo",
+	"obtener_servicio_clima",
 	"ServicioIndicadores",
 	"validar_ciudad",
 	"validar_indicador",

@@ -8,9 +8,9 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **104 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 29 · `tests/test_documentacion.py` 4), sin red, en verde |
+| Pruebas | **111 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 36 · `tests/test_documentacion.py` 4), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 59 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
+| Trazabilidad | `VALIDACION_IA.md`: 60 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -91,7 +91,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 | 8 | Ver registros de tiempo (los empleados, solo los propios) | todos |
 | 9 | Editar o eliminar registros de tiempo (los empleados, solo los propios) | todos |
 | 10 | Generar informe de horas, empleados, departamentos o proyectos, en texto o CSV, guardado en `informes/` (los empleados, solo el de sus horas) | todos |
-| 11 | Consultar clima de la ciudad de un proyecto (OpenWeatherMap) | todos |
+| 11 | Consultar clima de la ciudad de un proyecto (OpenWeatherMap si hay llave; si no, Open-Meteo, que no la exige) | todos |
 | 12 | Consultar indicador económico: dólar, euro o UF (mindicador.cl) | todos |
 | 13 | Calcular pago de un empleado en moneda extranjera | admin, rrhh |
 | 14 | Crear usuario con su ficha de empleado (RUT, cargo, dirección, teléfono, contrato y salario), cualquiera sea el rol; el usuario y el correo institucional se generan solos | admin, rrhh |
@@ -117,7 +117,7 @@ Comportamientos que conviene conocer al probar:
 ```text
 Ecotech_solutions/
 ├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
-├── VALIDACION_IA.md                registro técnico de los 59 cambios y del uso de IA
+├── VALIDACION_IA.md                registro técnico de los 60 cambios y del uso de IA
 ├── datos_ejemplo.py                genera una base de demostración con datos ficticios
 ├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
 ├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
@@ -126,7 +126,7 @@ Ecotech_solutions/
 ├── .env.demo                       configuración lista para la base de demostración
 ├── tests/
 │   ├── test_nucleo.py              71 pruebas del núcleo y de los flujos de menú
-│   ├── test_servicios_externos.py  29 pruebas de los servicios externos (sin red)
+│   ├── test_servicios_externos.py  36 pruebas de los servicios externos (sin red)
 │   └── test_documentacion.py        4 pruebas que contrastan esta guía con el proyecto
 ├── docs/
 │   ├── CREDENCIALES_PRUEBA.md      cuentas, configuración y recorrido para evaluar
@@ -178,13 +178,13 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 59 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 60 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
 | Criterio | Evidencia |
 |---|---|
-| **3.1.1** Consumo de APIs con librerías oficiales | `requests.Session` en `ClienteHTTP`; OpenWeatherMap (`/weather`, métrico, español) y mindicador.cl (`/api/{codigo}`); JSON validado en tipo y rango (temperatura, humedad, descripción; valor, fecha, moneda); datos usados en las opciones 11, 12 y 13. |
+| **3.1.1** Consumo de APIs con librerías oficiales | `requests.Session` en `ClienteHTTP`; OpenWeatherMap (`/weather`, métrico, español), Open-Meteo (geocodificación más pronóstico, sin llave) y mindicador.cl (`/api/{codigo}`); JSON validado en tipo y rango (temperatura, humedad, descripción; valor, fecha, moneda); datos usados en las opciones 11, 12 y 13. |
 | **3.1.2** Autenticación y validación de entradas | Login PBKDF2 con rechazo de credenciales vacías; política de contraseñas; RUT ajeno enmascarado para el rol `empleado`; `validar_ciudad()` (letras, espacios y guiones) y lista blanca `INDICADORES_PERMITIDOS`; llaves y códigos solo en `.env`; `hmac.compare_digest`; solo usuarios autenticados llegan al menú. |
 | **3.1.3** Manejo de errores en servicios externos | 401/403, 404, 429, 5xx, otros códigos, timeout, sin conexión, cuerpo no JSON y respuestas > 1 MB → `ErrorServicioExterno` con mensaje genérico (sin URL ni llave); un reintento ante 5xx/timeout; respaldo local con aviso; el menú captura y continúa. Registro técnico en `ecotech.log` sin secretos. |
 | **3.1.4** Ajuste de seguridad con apoyo de IA | Cambios 27-34: se descartaron valores por defecto para secretos, `except Exception` genérico, `str(error)` al usuario, peticiones sin `timeout`, caché con expiración; se agregaron límite de tamaño, HTTPS obligatorio y logging sin llave (verificado por prueba). |
@@ -229,7 +229,8 @@ RUT chileno con dígito verificador; nombres solo con letras; correo con formato
 ## 7. Servicios externos
 
 - **`ClienteHTTP`**: `requests.Session`, HTTPS obligatorio, `timeout` de 8 s (20 s para mindicador.cl, que responde entre 5 y 8 s), un reintento ante timeout o 5xx, límite de 1 MB por respuesta, traducción de códigos HTTP y errores de red a `ErrorServicioExterno`. Los mensajes al usuario nunca incluyen URL, parámetros ni llave; el detalle técnico va a `ecotech.log` (los errores de `requests` se registran solo por tipo, porque su texto incluye la URL completa con la llave).
-- **`ServicioClima`** (OpenWeatherMap): temperatura, humedad y descripción de la ciudad del proyecto, con rangos plausibles verificados.
+- **`ServicioClima`** (OpenWeatherMap): temperatura, humedad y descripción de la ciudad del proyecto, con rangos plausibles verificados. Necesita `OPENWEATHER_API_KEY`.
+- **`ServicioClimaPublico`** (Open-Meteo, sin llave ni registro): la misma información para quien no tenga credencial. Resuelve el nombre de la ciudad a coordenadas con la API de geocodificación del proveedor y traduce el código WMO del estado del tiempo a texto (`describir_tiempo()`). `obtener_servicio_clima()` elige uno u otro según haya llave configurada, de modo que el sistema funciona recién clonado sin publicar ninguna credencial.
 - **`ServicioIndicadores`** (mindicador.cl, sin llave): último valor de la serie (`serie[0]`, orden descendente) para `dolar`, `euro` o `uf`; otros códigos se rechazan antes de la red porque la API responde 500 y se confundiría con una caída.
 - **Cálculo de pago**: `sumar_horas_empleado()` × `calcular_tarifa_hora()` (fórmula de la Dirección del Trabajo: sueldo / 30 × 7 / 44 h) → CLP → moneda del indicador. Resultado inmutable `Pago` con ambos montos y el tipo de cambio usado.
 - **Respaldo local**: cada consulta exitosa se guarda en `consultas_clima` / `indicadores`; ante un fallo, `consultar_con_respaldo()` devuelve el último dato con aviso y fecha; solo sin respaldo se propaga el error.
@@ -245,7 +246,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 |---|---|---|
 | `tests/test_nucleo.py` | 71 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
 | `tests/test_documentacion.py` | 4 | Contrasta esta guía con el proyecto: que cada cambio de `VALIDACION_IA.md` esté en su índice y en orden, que las cifras de cambios y de pruebas citadas aquí sean las reales y que los archivos mencionados existan. |
-| `tests/test_servicios_externos.py` | 29 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
+| `tests/test_servicios_externos.py` | 36 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Para el servicio sin llave: geocodificación, traducción de códigos WMO, ciudad inexistente y elección automática de servicio. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.
 
@@ -261,6 +262,7 @@ Cada una está justificada en el cambio indicado de `VALIDACION_IA.md`.
 | Desasignar de un proyecto conserva las horas | Son trabajo realizado, necesario para informes y pagos; solo se impide registrar horas nuevas | 40 |
 | El informe de empleados omite los datos cifrados | Un archivo en `informes/` queda fuera del cifrado en reposo | 41 |
 | Lista blanca de indicadores | mindicador.cl responde 500 a códigos desconocidos, indistinguible de una caída | 29 |
+| Segundo servicio de clima sin llave en vez de publicar la credencial | El sistema funciona recién clonado y ninguna credencial queda expuesta en el repositorio | 60 |
 | Respaldo solo ante fallo, sin caché con expiración | El usuario debe saber cuándo el dato no es en tiempo real | 30 |
 | Valor hora con la fórmula de la Dirección del Trabajo (44 h) | Convención legal vigente en Chile, en lugar de dividir por 180 | 36 |
 | Primer usuario forzado a `admin`; sin autoregistro posterior | La guía asigna el registro a RR.HH.; sin un admin nadie podría crear cuentas | 38 |
