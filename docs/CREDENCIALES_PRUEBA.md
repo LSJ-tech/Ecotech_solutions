@@ -35,8 +35,10 @@ py -3 main.py
 Si se prefiere partir de una base vacía, basta con borrar `ECOTECH_DB_PATH` del `.env` y registrar el administrador inicial desde la pantalla de acceso. Para volver a generar la base de demostración desde cero:
 
 ```powershell
-py -3 datos_ejemplo.py docs/demo/ecotech_demo.db
+py -3 datos_ejemplo.py
 ```
+
+Escribe en la base que indique `ECOTECH_DB_PATH`, así que con el `.env` de arriba regenera la base de demostración.
 
 ## 2. Cuentas disponibles
 

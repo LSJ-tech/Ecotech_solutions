@@ -94,8 +94,8 @@ class PruebasMigracionEmpleados(unittest.TestCase):
 	def test_agrega_columnas_y_conserva_datos_y_relaciones(self):
 		main.inicializar_bd(self.connection)
 		columnas = {f["name"] for f in self.connection.execute("PRAGMA table_info(empleados)")}
-		self.assertTrue(
-			{"id_empleado", "direccion", "telefono", "fecha_inicio_contrato", "salario"} <= columnas
+		self.assertLessEqual(
+			{"id_empleado", "direccion", "telefono", "fecha_inicio_contrato", "salario"}, columnas
 		)
 		fila = self.connection.execute("SELECT * FROM empleados").fetchone()
 		self.assertEqual((fila["id_empleado"], fila["rut"], fila["id_departamento"]), (1, RUT, 1))
@@ -438,8 +438,10 @@ class PruebasGerenteYDescripcionTarea(unittest.TestCase):
 		main.guardar_registro_tiempo(self.connection, registro)
 		fila = main.listar_registros_tiempo(self.connection)[0]
 		self.assertEqual(fila["descripcion_tarea"], "Instalacion de paneles")
+		fecha = date(2026, 1, 2)
+		descripcion_larga = "x" * 201
 		with self.assertRaises(ValueError):
-			main.RegistroTiempo(0, date(2026, 1, 2), 8, self.empleado, proyecto, "x" * 201)
+			main.RegistroTiempo(0, fecha, 8, self.empleado, proyecto, descripcion_larga)
 		self.assertTrue(
 			main.actualizar_registro_tiempo(
 				self.connection, fila["id_registro"], fecha=date(2026, 1, 3), horas=4,
@@ -511,11 +513,11 @@ class PruebasCrudCompleto(unittest.TestCase):
 		self.assertFalse(main.desasignar_empleado_proyecto_bd(self.connection, RUT, self.proyecto.id_proyecto))
 		self.assertEqual(self._contar("registros_tiempo"), 1)
 		self.assertEqual(main.listar_empleados_proyecto(self.connection, self.proyecto.id_proyecto), [])
+		registro = main.RegistroTiempo(
+			0, date(2026, 1, 3), 2, self.empleado, self.proyecto, "Nada"
+		)
 		with self.assertRaises(ValueError):
-			main.guardar_registro_tiempo(
-				self.connection,
-				main.RegistroTiempo(0, date(2026, 1, 3), 2, self.empleado, self.proyecto, "Nada"),
-			)
+			main.guardar_registro_tiempo(self.connection, registro)
 
 	def test_desasignar_en_el_dominio_es_simetrico(self):
 		main.asignar_empleado_a_proyecto(self.empleado, self.proyecto)
@@ -754,8 +756,9 @@ class PruebasPoliticaContrasenas(unittest.TestCase):
 				main.validar_contrasena(invalida)
 
 	def test_persistir_y_actualizar_pasan_por_la_politica(self):
+		debil = main.Usuario(0, "u", "corta1", rol="admin")
 		with self.assertRaisesRegex(ValueError, "8 caracteres"):
-			main.guardar_usuario(self.connection, main.Usuario(0, "u", "corta1", rol="admin"))
+			main.guardar_usuario(self.connection, debil)
 		self.assertEqual(self.connection.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0], 0)
 		usuario = main.Usuario(0, "u", "Clave1234", rol="admin")
 		with self.assertRaisesRegex(ValueError, "letras y números"):

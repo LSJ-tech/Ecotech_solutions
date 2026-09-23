@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 56)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 57)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -78,6 +78,7 @@ Cómo usar este documento:
   - [Cambio 54 - Correo institucional derivado del nombre de usuario](#cambio-54---correo-institucional-derivado-del-nombre-de-usuario)
   - [Cambio 55 - El correo institucional deja de ser editable](#cambio-55---el-correo-institucional-deja-de-ser-editable)
   - [Cambio 56 - Base de demostración y credenciales de prueba](#cambio-56---base-de-demostración-y-credenciales-de-prueba)
+  - [Cambio 57 - Incidencias de SonarCloud](#cambio-57---incidencias-de-sonarcloud)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1316,7 +1317,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 56)
+## Fase 5 - Documentación y cierre (cambios 44 a 57)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1619,3 +1620,31 @@ La llave de OpenWeatherMap no se incluye: es una credencial personal de un servi
 - Con la clave de la guía, `listar_empleados()` devuelve los datos legibles y la fila cruda de la base conserva los tokens `gAAAAA…`; con otra clave, el sistema responde "la clave configurada no corresponde a la base de datos" sin exponer nada.
 - Sesión completa como `mmorales` usando exactamente la configuración documentada: el menú muestra solo las opciones del rol y el listado enmascara los RUT ajenos.
 - Revisión cruzada del `Readme.md` con un guion que contrasta sus cifras contra el proyecto: 56 cambios registrados, 100 pruebas ejecutadas (71 y 29 por suite) y existencia de cada archivo citado. Se corrigieron tres referencias a "47 cambios" que habían quedado del cambio 47 y se sumaron a la tabla de decisiones las de los cambios 50, 53, 54, 55 y 56.
+
+### Cambio 57 - Incidencias de SonarCloud
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `main.py`, `interfaz.py`, `datos_ejemplo.py`, `tests/test_nucleo.py`, `docs/CREDENCIALES_PRUEBA.md`, `Readme.md`
+**Objetivo:** resolver las quince incidencias que SonarCloud reportó en la rama `main` (una vulnerabilidad y catorce *code smells*), consultadas por su API pública.
+
+#### Incidencias y tratamiento
+
+| Regla | Dónde | Tratamiento |
+|---|---|---|
+| `pythonsecurity:S8706` (vulnerabilidad) | `main.conectar_bd()` | **Corregida.** El análisis siguió el rastro de `sys.argv[1]` en `datos_ejemplo.py` hasta `sqlite3.connect()`: la ruta de la base llegaba desde la línea de comandos. Se eliminó ese argumento; la ruta se define con `ECOTECH_DB_PATH`, que ya era el mecanismo documentado, y el guion quedó con una sola forma de elegir destino. |
+| `python:S1135` | `main.py:49` | **Falso positivo, corregido igual.** El comentario decía "Todo token Fernet comienza con este prefijo" y la palabra española *Todo* se interpretó como el marcador inglés `TODO`. Se cambió por "Cada token Fernet…". |
+| `python:S1192` (9 casos) | `datos_ejemplo.py`, `interfaz.py`, `main.py` | **Corregidas.** Los nombres de departamentos y proyectos aparecían hasta siete veces en tablas distintas del guion de datos; ahora son constantes, de modo que un error de escritura se detecta al ejecutar y no deja una asignación apuntando a un nombre inexistente. En los módulos se agregaron `CAMPO_NOMBRE_USUARIO`, `MENSAJE_RUT_EMPLEADO` y `CAMPO_NOMBRE`. |
+| `python:S5906` | `tests/test_nucleo.py:97` | **Corregida.** `assertTrue(conjunto <= columnas)` pasó a `assertLessEqual(conjunto, columnas)`: si falla, el mensaje muestra qué columna falta en lugar de un simple *False*. |
+| `python:S5778` (3 casos) | `tests/test_nucleo.py` | **Corregidas.** Los bloques `assertRaises` contenían más de una llamada capaz de lanzar la excepción, de modo que la prueba podía pasar por el motivo equivocado. Se construyó el objeto antes del bloque, dejando dentro solo la operación que debe fallar. |
+
+#### Revisión técnica
+
+La vulnerabilidad es el caso interesante para la defensa: en un guion local, recibir la ruta de la base por argumento no representa un riesgo real, y se podría haber marcado como falso positivo. Se prefirió eliminarla porque el proyecto ya tenía un mecanismo para lo mismo (`ECOTECH_DB_PATH`) y mantener dos caminos para elegir la base era redundante; la corrección simplifica el guion en lugar de agregar validaciones defensivas.
+
+El aviso `S1135` muestra el límite de un analizador configurado para código en inglés: reconoce marcadores como `TODO` o `FIXME` por su forma. Se reescribió el comentario en vez de silenciar la regla, porque el objetivo del proyecto es no dejar avisos abiertos.
+
+#### Validación
+
+- Consulta a la API de SonarCloud antes del cambio: 15 incidencias abiertas (1 vulnerabilidad, 14 *code smells*), 0 *bugs*, 0 *security hotspots*, 0 % de duplicación.
+- `py -3 -m ruff check --select F` sin nombres indefinidos y `py -3 -m unittest discover -s tests -t .`: 100 pruebas en verde después de los cambios.
+- `py -3 datos_ejemplo.py` con `ECOTECH_DB_PATH` regeneró la base de demostración completa (6 cuentas, 4 departamentos, 5 proyectos, 8 registros) y se volvieron a guardar los tres indicadores de respaldo.

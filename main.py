@@ -34,6 +34,7 @@ VARIABLES_CODIGO_ROL = {
 }
 ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
+CAMPO_NOMBRE_USUARIO = "El nombre de usuario"
 LARGO_MAXIMO_DESCRIPCION_TAREA = 200
 LARGO_MINIMO_CONTRASENA = 8
 DIGITOS_RUT_VISIBLES = 4
@@ -46,7 +47,7 @@ DIAS_MES = 30
 DIAS_SEMANA = 7
 PATRON_TELEFONO = re.compile(r"\+?[\d ]{8,15}")
 VARIABLE_CLAVE_CIFRADO = "ECOTECH_CLAVE_CIFRADO"
-# Todo token Fernet comienza con este prefijo (versión 0x80 en base64 url-safe).
+# Cada token Fernet comienza con este prefijo (versión 0x80 en base64 url-safe).
 PREFIJO_TOKEN_FERNET = "gAAAAA"
 
 SCHEMA_SQL = """
@@ -206,9 +207,9 @@ def normalizar_identificador(valor: str) -> str:
 def generar_correo(nombre_usuario: str) -> str:
 	"""Deriva el correo institucional del nombre de usuario: lsilva -> lsilva@ecotech.cl."""
 
-	usuario = normalizar_identificador(validar_texto(nombre_usuario, "El nombre de usuario"))
+	usuario = normalizar_identificador(validar_texto(nombre_usuario, CAMPO_NOMBRE_USUARIO))
 	if not usuario:
-		raise ValueError("El nombre de usuario no permite formar un correo válido.")
+		raise ValueError(f"{CAMPO_NOMBRE_USUARIO} no permite formar un correo válido.")
 	return f"{usuario}@{DOMINIO_CORREO}"
 
 
@@ -1019,7 +1020,7 @@ def actualizar_usuario(
 ) -> bool:
 	"""Actualiza los datos no sensibles de un usuario."""
 
-	nombre_usuario = validar_texto(nombre_usuario, "El nombre de usuario")
+	nombre_usuario = validar_texto(nombre_usuario, CAMPO_NOMBRE_USUARIO)
 	cursor = connection.execute(
 		"""
 		UPDATE usuarios SET nombre_usuario = ?, activo = ?
@@ -1316,7 +1317,7 @@ class Usuario:
 		if id_usuario < 0:
 			raise ValueError("El identificador del usuario no puede ser negativo.")
 		self.id_usuario = id_usuario
-		self.nombre_usuario = validar_texto(nombre_usuario, "El nombre de usuario")
+		self.nombre_usuario = validar_texto(nombre_usuario, CAMPO_NOMBRE_USUARIO)
 		self._contrasena = validar_texto(contrasena, "La contraseña")
 		self.activo = activo
 		self.empleado = empleado
@@ -1611,6 +1612,7 @@ def registrar_tiempo(registro: RegistroTiempo) -> None:
 
 __all__ = [
 	"CAMPO_NOMBRE_DEPARTAMENTO",
+	"CAMPO_NOMBRE_USUARIO",
 	"CODIFICACION",
 	"DATABASE_PATH",
 	"DIAS_MES",

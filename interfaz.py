@@ -92,6 +92,8 @@ MENSAJE_ID_DEPARTAMENTO = "ID del departamento: "
 MENSAJE_PROYECTO_INEXISTENTE = "El proyecto indicado no existe."
 MENSAJE_DEPARTAMENTO_INEXISTENTE = "El departamento indicado no existe."
 MENSAJE_ENTER_CONSERVA = "Enter conserva el valor actual."
+MENSAJE_RUT_EMPLEADO = "RUT del empleado: "
+CAMPO_NOMBRE = "El nombre"
 MENSAJE_CANCELADO = "Operacion cancelada."
 MENSAJE_VOLVER = "\nPresione Enter para volver al menu... "
 # Errores previstos de una operacion: se informan sin cortar la sesion.
@@ -331,7 +333,7 @@ def generar_nombre_usuario(
 ) -> str:
 	"""Genera un usuario con la inicial del nombre y un apellido."""
 
-	nombre = normalizar_identificador(validar_texto(nombre, "El nombre"))
+	nombre = normalizar_identificador(validar_texto(nombre, CAMPO_NOMBRE))
 	primer_apellido = normalizar_identificador(validar_texto(primer_apellido, "El primer apellido"))
 	segundo_apellido = normalizar_identificador(
 		validar_texto(segundo_apellido, "El segundo apellido")
@@ -579,7 +581,7 @@ def registrar_usuario_menu(
 				break
 			print("Codigo secreto incorrecto. Intente nuevamente.")
 
-	nombre = leer_nombre("Nombre: ", "El nombre")
+	nombre = leer_nombre("Nombre: ", CAMPO_NOMBRE)
 	primer_apellido = leer_nombre("Primer apellido: ", "El primer apellido")
 	segundo_apellido = leer_nombre("Segundo apellido: ", "El segundo apellido")
 	nombre_usuario = generar_nombre_usuario(
@@ -980,7 +982,7 @@ def editar_empleado_menu(connection: sqlite3.Connection) -> None:
 	fila = obtener_fila_empleado(connection, leer_rut())
 	actual = fila_a_empleado(fila)
 	print(MENSAJE_ENTER_CONSERVA)
-	nombre = leer_o_conservar("Nombre", actual.nombre, lambda v: validar_texto(v, "El nombre"))
+	nombre = leer_o_conservar("Nombre", actual.nombre, lambda v: validar_texto(v, CAMPO_NOMBRE))
 	apellido = leer_o_conservar(
 		"Apellido", actual.apellido, lambda v: validar_texto(v, "El apellido")
 	)
@@ -1071,7 +1073,7 @@ def asignar_proyecto_menu(
 
 	verificar_gestion(usuario_actual, "asignar empleados a proyectos")
 	mostrar_empleados(connection)
-	rut = validar_rut(input("RUT del empleado: "))
+	rut = validar_rut(input(MENSAJE_RUT_EMPLEADO))
 	mostrar_proyectos(connection)
 	id_proyecto = leer_entero(MENSAJE_ID_PROYECTO)
 	asignar_empleado_proyecto_bd(connection, rut, id_proyecto)
@@ -1144,7 +1146,7 @@ def desasignar_proyecto_menu(connection: sqlite3.Connection) -> None:
 	mostrar_proyectos(connection)
 	fila = obtener_proyecto(connection, leer_entero(MENSAJE_ID_PROYECTO))
 	mostrar_empleados_proyecto(connection, fila["id_proyecto"])
-	rut = leer_rut("RUT del empleado: ")
+	rut = leer_rut(MENSAJE_RUT_EMPLEADO)
 	if not desasignar_empleado_proyecto_bd(connection, rut, fila["id_proyecto"]):
 		raise ValueError("El empleado no está asignado a ese proyecto.")
 	print("Empleado desasignado del proyecto; sus horas registradas se conservan.")
@@ -1175,7 +1177,7 @@ def registrar_tiempo_menu(
 
 	if usuario_actual.rol in ROLES_GESTION:
 		mostrar_empleados(connection)
-		rut = validar_rut(input("RUT del empleado: "))
+		rut = validar_rut(input(MENSAJE_RUT_EMPLEADO))
 	else:
 		rut = obtener_rut_propio(usuario_actual)
 	mostrar_proyectos(connection)

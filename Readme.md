@@ -266,7 +266,7 @@ El desarrollo fue incremental: cada cambio se implementó, se probó y se docume
 
 Además de las suites automatizadas, durante el desarrollo se verificó manualmente:
 
-- Compilación (`py -3 -m py_compile`) y `ruff --select F` sin nombres indefinidos en cada cambio; sin avisos de mantenibilidad SonarQube en módulos ni pruebas (literales centralizados, complejidad cognitiva bajo el umbral, `datetime` con zona horaria, reglas S1192, S3776, S5778, S5906, S8572).
+- Compilación (`py -3 -m py_compile`) y `ruff --select F` sin nombres indefinidos en cada cambio; análisis de SonarCloud sin incidencias abiertas (literales centralizados, complejidad cognitiva bajo el umbral, `datetime` con zona horaria, reglas S1192, S3776, S5778, S5906, S8572).
 - Migraciones y cifrado probados sobre copias de la base real del equipo, sin pérdida de filas ni claves foráneas inválidas.
 - Consulta real a OpenWeatherMap con la llave activa (`Santiago: 16.98 °C, humedad 63%, nubes`) y a mindicador.cl.
 - Recorrido completo del menú sobre una base nueva: registro del administrador, creación y edición de departamento, empleado y proyecto, registro y edición de horas, desasignación, informes y eliminaciones con confirmación hasta dejar las tablas vacías.
