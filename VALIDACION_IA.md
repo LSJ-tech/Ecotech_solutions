@@ -377,7 +377,7 @@ Se agrego `__all__` a `main.py` con las entidades, validaciones y operaciones de
 
 **Fecha:** 2026-09-13
 **Archivo local:** `defensa_oral.py`
-**Objetivo:** preparar la defensa argumentativa de Maximiliano y Logan sin incorporar el guion al producto publicado.
+**Objetivo:** preparar la defensa argumentativa de Maximiliano Montoya y Logan Silva sin incorporar el guion al producto publicado.
 
 #### Implementación
 

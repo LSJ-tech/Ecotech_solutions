@@ -2,7 +2,7 @@
 
 Aplicación de consola en **Python 3** con **SQLite** que gestiona empleados, departamentos, proyectos y registros de tiempo de EcoTech Solutions, con autenticación por roles, cifrado de datos personales, informes exportables y consumo de servicios externos (clima e indicadores económicos).
 
-Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (INACAP). Autores: **Logan Silva** y **Maximiliano**.
+Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (INACAP). Autores: **Logan Silva** y **Maximiliano Montoya**.
 
 | | |
 |---|---|
