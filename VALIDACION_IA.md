@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 53)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 54)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -75,6 +75,7 @@ Cómo usar este documento:
   - [Cambio 51 - Pausa antes de volver al menú](#cambio-51---pausa-antes-de-volver-al-menú)
   - [Cambio 52 - Submenús que se repiten hasta volver](#cambio-52---submenús-que-se-repiten-hasta-volver)
   - [Cambio 53 - Tiempo de espera propio para mindicador.cl](#cambio-53---tiempo-de-espera-propio-para-mindicadorcl)
+  - [Cambio 54 - Correo institucional derivado del nombre de usuario](#cambio-54---correo-institucional-derivado-del-nombre-de-usuario)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1313,7 +1314,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 53)
+## Fase 5 - Documentación y cierre (cambios 44 a 54)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1541,3 +1542,28 @@ Se evaluó subir el timeout general a 20 s: se descartó porque penalizaría al 
 
 - `py -3 -m unittest discover -s tests -t .`: 96 pruebas en verde. La nueva comprueba que el servicio de indicadores use un timeout mayor que el general y que el de clima conserve el general.
 - Consulta real a mindicador.cl con el timeout nuevo: dólar observado $945,87, euro $1.081,49 y UF $40.999,93 (valores del 2026-09-23), respondidas entre 1,6 s y 2,2 s. Las tres quedaron guardadas en la tabla `indicadores`, de modo que el respaldo local puede responder si el servicio falla durante la demostración.
+
+### Cambio 54 - Correo institucional derivado del nombre de usuario
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `main.py`, `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`
+**Objetivo:** estandarizar el correo de las cuentas. Se escribía a mano, de modo que cada registro podía usar un dominio distinto y no había relación entre el usuario y su dirección.
+
+#### Implementación
+
+- `generar_correo()` en `main.py` arma la dirección con el nombre de usuario y `DOMINIO_CORREO`: `lsilva` produce `lsilva@ecotech.cl`. El registro ya no pide el correo y `leer_correo()` se eliminó.
+- `normalizar_identificador()` deja los identificadores en minúsculas, sin tildes, sin ñ y sin símbolos ni espacios. Se aplica en `generar_nombre_usuario()`, de modo que `Matías Zúñiga` produce el usuario `mzuniga` y el correo `mzuniga@ecotech.cl`. El nombre de la persona conserva sus tildes: solo se normaliza el identificador.
+- El mensaje final del registro muestra el usuario, el correo y el RUT de la ficha en tres líneas.
+
+#### Revisión técnica
+
+- El correo se deriva del usuario y no de nombre y apellido por separado, para que ambos identificadores coincidan siempre, incluso con homónimos: cuando el primer apellido ya está ocupado, `generar_nombre_usuario()` usa el segundo, y el correo lo sigue (`asoto` produce `asoto@ecotech.cl`).
+- La normalización a ASCII surgió al revisar el cambio: un correo con tilde o ñ no es una dirección válida y un usuario así es difícil de escribir al iniciar sesión. Antes de este cambio, un apellido como `Zúñiga` habría generado el usuario `mzúñiga`.
+- Se mantuvo la posibilidad de editar el correo desde `Gestionar empleados`, con su validación: el estándar aplica al crear la cuenta, y RR.HH. conserva la capacidad de corregir un caso excepcional.
+- El dominio quedó como constante del núcleo y no como variable de entorno: es parte de las reglas de la empresa, no un secreto ni un parámetro de despliegue.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 100 pruebas en verde. Las cuatro nuevas verifican la derivación del correo y el rechazo de un usuario que no produce dirección válida; la normalización de tildes, ñ, espacios y apóstrofos; que un apellido con tilde produce usuario y correo escribibles conservando el nombre con tildes en la ficha; y que ante un homónimo el correo sigue al usuario alternativo. Las pruebas de registro existentes dejaron de entregar el correo por teclado.
+- Prueba manual con la cuenta `cfuentes`: al crear una cuenta `rrhh` el formulario ya no pide el correo y termina mostrando `Usuario: mzuniga`, `Correo: mzuniga@ecotech.cl` y la ficha `21098765-7`.
+- El código de este cambio se subió en el commit anterior sin su documentación, porque el guion que actualiza los archivos falló y el commit se ejecutó igual; este commit la completa.
