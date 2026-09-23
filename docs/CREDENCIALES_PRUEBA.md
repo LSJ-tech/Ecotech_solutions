@@ -6,33 +6,29 @@ Esta guía permite ejecutar el sistema con datos ya cargados, sin registrar nada
 
 ## 1. Preparar el entorno
 
-Desde la raíz del proyecto:
+Tras clonar el repositorio, desde su carpeta raíz:
 
 ```powershell
 py -3 -m pip install -r requirements.txt
-copy .env.example .env
-```
-
-Luego abrir `.env` y dejarlo con estos valores:
-
-```ini
-ECOTECH_CODIGO_ADMIN=1234
-ECOTECH_CODIGO_RRHH=12345
-ECOTECH_CLAVE_CIFRADO=AF5eSoRH_OxnLAuxonQlW6T7itr6z6nBEZpB8uGaxdE=
-ECOTECH_DB_PATH=docs/demo/ecotech_demo.db
-OPENWEATHER_API_KEY=
-```
-
-- `ECOTECH_DB_PATH` apunta a la base de demostración incluida en el repositorio, de modo que no hace falta copiar archivos.
-- `OPENWEATHER_API_KEY` se entrega por separado junto al informe, porque es una credencial personal de un servicio externo. Sin ella el sistema funciona igual: la opción de clima informa que el servicio no está configurado y el resto del menú sigue operando. La consulta de indicadores económicos (opción 12) no necesita llave.
-
-Para ejecutar:
-
-```powershell
+copy .env.demo .env
 py -3 main.py
 ```
 
-Si se prefiere partir de una base vacía, basta con borrar `ECOTECH_DB_PATH` del `.env` y registrar el administrador inicial desde la pantalla de acceso. Para volver a generar la base de demostración desde cero:
+Eso es todo: `.env.demo` ya trae los códigos de rol, la ruta de la base de demostración y su clave de cifrado, de modo que el sistema arranca con los datos cargados.
+
+Qué contiene esa configuración:
+
+| Variable | Valor | Para qué |
+|---|---|---|
+| `ECOTECH_CODIGO_ADMIN` | `1234` | Se pide al **crear** una cuenta `admin`, no al iniciar sesión |
+| `ECOTECH_CODIGO_RRHH` | `12345` | Ídem para una cuenta `rrhh` |
+| `ECOTECH_DB_PATH` | `docs/demo/ecotech_demo.db` | La base de demostración incluida en el repositorio |
+| `ECOTECH_CLAVE_CIFRADO` | `AF5eSoRH_Oxn…` | Clave Fernet con la que está cifrada esa base |
+| `OPENWEATHER_API_KEY` | (vacía) | Se entrega junto al informe: es una credencial personal. Sin ella el sistema funciona igual; solo la consulta de clima avisa que no está configurada. Los indicadores económicos (opción 12) no necesitan llave |
+
+Si se prefiere partir de cero, `copy .env.example .env` deja el archivo vacío para completarlo a mano.
+
+Para partir de una base vacía, basta con borrar `ECOTECH_DB_PATH` del `.env` y registrar el administrador inicial desde la pantalla de acceso. Para volver a generar la base de demostración desde cero:
 
 ```powershell
 py -3 datos_ejemplo.py

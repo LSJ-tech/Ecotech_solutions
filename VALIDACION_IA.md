@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 58)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 59)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -80,6 +80,7 @@ Cómo usar este documento:
   - [Cambio 56 - Base de demostración y credenciales de prueba](#cambio-56---base-de-demostración-y-credenciales-de-prueba)
   - [Cambio 57 - Incidencias de SonarCloud](#cambio-57---incidencias-de-sonarcloud)
   - [Cambio 58 - Pruebas que vigilan la documentación](#cambio-58---pruebas-que-vigilan-la-documentación)
+  - [Cambio 59 - Arranque en un comando tras clonar](#cambio-59---arranque-en-un-comando-tras-clonar)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1318,7 +1319,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 58)
+## Fase 5 - Documentación y cierre (cambios 44 a 59)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1677,3 +1678,29 @@ Contar las pruebas con `loadTestsFromName(...).countTestCases()` evita ejecutarl
 - Antes de corregir nada, la suite falló con tres avisos exactos: el `Readme.md` citaba 56 cambios frente a 57 registrados, le faltaba la fila de la nueva suite y decía 100 pruebas en lugar de 104. Es decir, la prueba detectó el desfase que motivó el cambio.
 - `py -3 -m unittest discover -s tests -t .`: 104 pruebas en verde tras poner al día el `Readme.md` y la guía de credenciales.
 - La prueba volvió a avisar al agregar esta misma entrada: con el cambio 58 registrado, el `Readme.md` seguía citando 57. Se corrigió y la suite quedó en verde.
+
+### Cambio 59 - Arranque en un comando tras clonar
+
+**Fecha:** 2026-09-23
+**Archivo creado:** `.env.demo`
+**Archivos modificados:** `Readme.md`, `docs/CREDENCIALES_PRUEBA.md`
+**Objetivo:** que clonar el repositorio y ejecutar el sistema muestre la base de demostración sin configuración manual. El docente indicó que clonaría el repositorio para probarlo.
+
+#### Hallazgo
+
+Se clonó el repositorio en una carpeta limpia y se ejecutó `py -3 main.py`. El sistema arrancó, pero sin `.env` no había ruta a la base de demostración: creó una base vacía y ofreció registrar el administrador inicial. Los datos cargados estaban en el repositorio, pero quedaban fuera de alcance hasta copiar `.env.example`, pegar cuatro valores a mano y saber de dónde sacarlos.
+
+#### Implementación
+
+`.env.demo` trae la configuración completa de la demostración: los códigos de rol, `ECOTECH_DB_PATH` apuntando a `docs/demo/ecotech_demo.db` y la clave Fernet con la que esa base está cifrada. El arranque queda en tres líneas: instalar dependencias, `copy .env.demo .env` y ejecutar. El `Readme.md` y la guía de credenciales separan ahora dos caminos: probar con datos cargados (`.env.demo`) o partir de una base propia y vacía (`.env.example`).
+
+#### Revisión técnica
+
+Se evaluó completar `.env.example` con esos valores, en lugar de crear otro archivo. Se descartó: ese archivo documenta la forma del `.env` para quien monta su propio entorno, y llenarlo con la clave de demostración confundiría ambos usos. Un archivo aparte, con su nombre y su encabezado explicando que solo sirve para la base ficticia, deja explícita la separación entre la configuración de demostración y la de trabajo, que sigue fuera del repositorio.
+
+La clave publicada aquí es la misma que ya aparece en `docs/CREDENCIALES_PRUEBA.md` desde el cambio 56, de modo que no se expone nada nuevo.
+
+#### Validación
+
+- Clonado limpio desde GitHub, `copy .env.demo .env` y ejecución: el sistema inicia sesión con las cuentas de la guía y muestra los seis empleados, los cuatro departamentos y los cinco proyectos con sus datos personales descifrados.
+- `py -3 -m unittest discover -s tests -t .`: 104 pruebas en verde.

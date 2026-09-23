@@ -10,7 +10,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
 | Pruebas | **104 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 29 · `tests/test_documentacion.py` 4), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 58 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
+| Trazabilidad | `VALIDACION_IA.md`: 59 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -45,6 +45,18 @@ En una frase por unidad:
 ## 2. Inicio rápido
 
 > **¿Viene a evaluar el proyecto?** `docs/CREDENCIALES_PRUEBA.md` trae la configuración lista, seis cuentas con sus contraseñas, una base de datos con datos ficticios ya cargados y un recorrido de prueba por cada criterio de la rúbrica.
+
+**Para probar el sistema con los datos ya cargados** (lo que necesita quien evalúa):
+
+```powershell
+py -3 -m pip install -r requirements.txt
+copy .env.demo .env
+py -3 main.py
+```
+
+`.env.demo` trae los códigos de rol, la base de demostración del repositorio y su clave de cifrado. Las cuentas están en `docs/CREDENCIALES_PRUEBA.md`.
+
+**Para partir de una base vacía y propia:**
 
 ```powershell
 py -3 -m pip install -r requirements.txt
@@ -105,12 +117,13 @@ Comportamientos que conviene conocer al probar:
 ```text
 Ecotech_solutions/
 ├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
-├── VALIDACION_IA.md                registro técnico de los 58 cambios y del uso de IA
+├── VALIDACION_IA.md                registro técnico de los 59 cambios y del uso de IA
 ├── datos_ejemplo.py                genera una base de demostración con datos ficticios
 ├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
 ├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
 ├── interfaz.py                     consola: menús, lectura validada de entradas, permisos por rol
 ├── requirements.txt · .env.example configuración
+├── .env.demo                       configuración lista para la base de demostración
 ├── tests/
 │   ├── test_nucleo.py              71 pruebas del núcleo y de los flujos de menú
 │   ├── test_servicios_externos.py  29 pruebas de los servicios externos (sin red)
@@ -165,7 +178,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 58 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 59 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
