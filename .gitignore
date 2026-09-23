@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 *.db
+# La base de demostracion si se versiona: datos ficticios, para que el
+# profesor pueda probar el sistema sin registrar nada a mano.
+!docs/demo/*.db
 .venv/
 venv/
 .env

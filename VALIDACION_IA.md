@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 55)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 56)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -77,6 +77,7 @@ Cómo usar este documento:
   - [Cambio 53 - Tiempo de espera propio para mindicador.cl](#cambio-53---tiempo-de-espera-propio-para-mindicadorcl)
   - [Cambio 54 - Correo institucional derivado del nombre de usuario](#cambio-54---correo-institucional-derivado-del-nombre-de-usuario)
   - [Cambio 55 - El correo institucional deja de ser editable](#cambio-55---el-correo-institucional-deja-de-ser-editable)
+  - [Cambio 56 - Base de demostración y credenciales de prueba](#cambio-56---base-de-demostración-y-credenciales-de-prueba)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1315,7 +1316,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 55)
+## Fase 5 - Documentación y cierre (cambios 44 a 56)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1589,3 +1590,31 @@ En el cambio 54 se había conservado la edición para permitir correcciones exce
 - `py -3 -m unittest discover -s tests -t .`: 100 pruebas en verde. La prueba de edición entrega un campo menos, comprueba que aparezca la leyenda `(no editable)` y que el correo almacenado no cambie tras editar el resto de la ficha.
 - Prueba manual sobre una copia de la base: al editar la ficha de `mmorales` el formulario informa `Correo institucional: mmorales@ecotech.cl (no editable)` y permite modificar cargo y salario.
 - Los correos cargados con el formato anterior (`matias.morales@ecotech.cl`) se normalizaron al formato derivado del usuario mediante `actualizar_empleado()`, de modo que la base local quedó consistente con la regla.
+
+### Cambio 56 - Base de demostración y credenciales de prueba
+
+**Fecha:** 2026-09-23
+**Archivos creados:** `datos_ejemplo.py`, `docs/CREDENCIALES_PRUEBA.md`, `docs/demo/ecotech_demo.db`
+**Archivos modificados:** `.gitignore`, `Readme.md`
+**Objetivo:** que quien evalúe el proyecto pueda ejecutarlo con datos ya cargados, sin registrar seis cuentas a mano, y sepa qué probar en cada criterio.
+
+#### Implementación
+
+- `datos_ejemplo.py` genera la base completa con la API del núcleo, de modo que los datos pasan por las mismas validaciones y el mismo cifrado que el uso normal: 6 cuentas (una por rol), 4 departamentos (uno sin gerente, a propósito), 5 proyectos con ciudades chilenas para el servicio de clima, 6 asignaciones y 8 registros de horas. Se niega a escribir sobre una base que ya tiene cuentas y acepta una ruta como argumento.
+- `docs/demo/ecotech_demo.db` es el resultado de ejecutarlo, versionado para que baste clonar el repositorio. Incluye además los valores reales de dólar, euro y UF del 2026-09-23 en la tabla `indicadores`, de modo que la opción de indicadores responde desde el respaldo local aunque el servicio externo falle.
+- `docs/CREDENCIALES_PRUEBA.md` reúne la configuración del `.env`, las seis cuentas con su contraseña y rol, el contenido de la base y una tabla de doce pruebas sugeridas, cada una asociada al criterio de la rúbrica que evidencia.
+- `.gitignore` sigue excluyendo `*.db` y agrega la excepción `!docs/demo/*.db`.
+
+#### Revisión técnica
+
+Publicar la base obliga a publicar también la clave con que está cifrada, porque sin ella los datos personales no se pueden leer; y una clave publicada junto a los datos que protege no protege nada. La decisión fue separar ambos roles: la base de demostración usa una **clave propia, publicada en la guía**, y contiene únicamente datos ficticios (los RUT se calcularon con dígito verificador válido, pero no corresponden a personas). La clave con que el equipo cifra su base de trabajo permanece en el `.env` local, excluido del repositorio. La guía explica esa distinción en su primer párrafo, porque un evaluador podría interpretar la clave publicada como un descuido.
+
+Se descartó versionar la base de trabajo del equipo: contenía el RUT real de un integrante y, al ser el archivo que se modifica en cada ejecución, cualquier prueba habría aparecido como cambio pendiente en el repositorio. Por eso la base de demostración vive en `docs/demo/` y la de trabajo sigue ignorada.
+
+La llave de OpenWeatherMap no se incluye: es una credencial personal de un servicio externo, se entrega junto al informe, y la guía aclara que sin ella el resto del sistema funciona igual.
+
+#### Validación
+
+- `py -3 datos_ejemplo.py docs/demo/ecotech_demo.db` sobre una ruta nueva: 6 usuarios, 6 empleados, 4 departamentos, 5 proyectos, 6 asignaciones y 8 registros.
+- Con la clave de la guía, `listar_empleados()` devuelve los datos legibles y la fila cruda de la base conserva los tokens `gAAAAA…`; con otra clave, el sistema responde "la clave configurada no corresponde a la base de datos" sin exponer nada.
+- Sesión completa como `mmorales` usando exactamente la configuración documentada: el menú muestra solo las opciones del rol y el listado enmascara los RUT ajenos.

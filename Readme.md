@@ -44,6 +44,8 @@ En una frase por unidad:
 
 ## 2. Inicio rápido
 
+> **¿Viene a evaluar el proyecto?** `docs/CREDENCIALES_PRUEBA.md` trae la configuración lista, seis cuentas con sus contraseñas, una base de datos con datos ficticios ya cargados y un recorrido de prueba por cada criterio de la rúbrica.
+
 ```powershell
 py -3 -m pip install -r requirements.txt
 copy .env.example .env
@@ -104,6 +106,7 @@ Comportamientos que conviene conocer al probar:
 Ecotech_solutions/
 ├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
 ├── VALIDACION_IA.md                registro técnico de los 47 cambios y del uso de IA
+├── datos_ejemplo.py                genera una base de demostración con datos ficticios
 ├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
 ├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
 ├── interfaz.py                     consola: menús, lectura validada de entradas, permisos por rol
@@ -112,6 +115,8 @@ Ecotech_solutions/
 │   ├── test_nucleo.py              71 pruebas del núcleo y de los flujos de menú
 │   └── test_servicios_externos.py  29 pruebas de los servicios externos (sin red)
 ├── docs/
+│   ├── CREDENCIALES_PRUEBA.md      cuentas, configuración y recorrido para evaluar
+│   ├── demo/ecotech_demo.db        base con datos ficticios, lista para usar
 │   ├── uml.mmd · uml.png           modelo vigente: diagrama de clases (Mermaid y su render)
 │   ├── uml_original_unidad1.png    modelo inicial entregado en la Unidad 1
 │   └── evaluacion/                 rúbrica y guías de las unidades 1, 2 y 3
