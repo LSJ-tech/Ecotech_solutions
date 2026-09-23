@@ -895,5 +895,41 @@ class PruebasEnmascaradoRut(unittest.TestCase):
 			self.assertNotIn(rut, salida)
 
 
+class PruebasPausaDelMenu(unittest.TestCase):
+	"""El menu espera antes de redibujarse para que el resultado sea legible."""
+
+	def ejecutar(self, opciones, opcion):
+		"""Ejecuta una opcion registrando los mensajes con que se pidio una tecla."""
+
+		pedidos = []
+		original = builtins.input
+		builtins.input = lambda mensaje="": (pedidos.append(mensaje), "")[1]
+		salida = io.StringIO()
+		try:
+			with contextlib.redirect_stdout(salida):
+				continuar = ui.ejecutar_opcion_menu(opciones, opcion)
+		finally:
+			builtins.input = original
+		return continuar, salida.getvalue(), pedidos
+
+	def test_espera_tras_ejecutar_una_opcion(self):
+		opciones = [("1", "Listar", lambda: print("dos empleados"))]
+		continuar, salida, pedidos = self.ejecutar(opciones, "1")
+		self.assertTrue(continuar)
+		self.assertIn("dos empleados", salida)
+		self.assertEqual(len(pedidos), 1)
+		self.assertIn("Enter para volver", pedidos[0])
+
+	def test_no_espera_al_salir_ni_ante_una_opcion_invalida(self):
+		opciones = [("1", "Listar", lambda: print("no deberia ejecutarse"))]
+		continuar, salida, pedidos = self.ejecutar(opciones, "0")
+		self.assertFalse(continuar)
+		self.assertEqual(pedidos, [])
+		continuar, salida, pedidos = self.ejecutar(opciones, "99")
+		self.assertTrue(continuar)
+		self.assertIn("Opcion no valida", salida)
+		self.assertEqual(pedidos, [])
+
+
 if __name__ == "__main__":
 	unittest.main()

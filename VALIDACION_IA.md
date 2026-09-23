@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 50)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 51)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -72,6 +72,7 @@ Cómo usar este documento:
   - [Cambio 48 - Ficha de empleado obligatoria para toda cuenta](#cambio-48---ficha-de-empleado-obligatoria-para-toda-cuenta)
   - [Cambio 49 - RUT de ejemplo genérico en la interfaz](#cambio-49---rut-de-ejemplo-genérico-en-la-interfaz)
   - [Cambio 50 - Enmascarado del RUT para roles sin gestión](#cambio-50---enmascarado-del-rut-para-roles-sin-gestión)
+  - [Cambio 51 - Pausa antes de volver al menú](#cambio-51---pausa-antes-de-volver-al-menú)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1310,7 +1311,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 50)
+## Fase 5 - Documentación y cierre (cambios 44 a 51)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1462,3 +1463,27 @@ Se pidió usar `12345678-9`, pero ese valor tiene el dígito verificador incorre
 
 - `py -3 -m unittest discover -s tests -t .`: 92 pruebas en verde. Las seis nuevas verifican el formato del enmascarado (incluido un cuerpo más corto que los dígitos visibles, que se devuelve sin cambios), que un empleado ve su RUT completo y los ajenos enmascarados, que gestión los ve completos, que un empleado no encuentra a nadie buscando por RUT pero sí por apellido, que gestión conserva la búsqueda por RUT y que una cuenta sin ficha no ve ningún RUT completo.
 - Prueba manual con dos cuentas sobre una base nueva: `admin` busca `19616711` y obtiene la ficha completa; la empleada `aperez` obtiene "No hay empleados que coincidan" con el mismo texto y, buscando `silva`, ve `****6711-0`.
+
+### Cambio 51 - Pausa antes de volver al menú
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`
+**Objetivo:** corregir un problema de usabilidad detectado al usar el sistema: al terminar una opción, el menú se redibujaba de inmediato y empujaba hacia arriba lo que se acababa de mostrar, de modo que un listado largo quedaba fuera de la pantalla antes de poder leerlo.
+
+#### Implementación
+
+- `pausar()` solicita un Enter con el mensaje `MENSAJE_VOLVER` antes de continuar.
+- Se llama desde `ejecutar_opcion_menu()` después de ejecutar la acción, y en el `except` de `mostrar_menu()` después de informar un error. Con esos dos puntos quedan cubiertos todos los resultados: listados, búsquedas, informes, clima, indicadores, cálculo de pagos y mensajes de operación fallida.
+- No se pausa al elegir `0` (salir) ni ante una opción inexistente, porque no hay resultado que leer.
+- Los submenús no necesitan pausa propia: son la acción de una opción del menú principal, de modo que la pausa ocurre una sola vez al volver.
+
+#### Revisión técnica
+
+Se evaluó pausar dentro de cada función de listado. Se descartó: habría que recordar agregarla en cada opción nueva y dejaría fuera los mensajes de error, que es justamente cuando conviene detenerse. Poner la pausa en el bucle del menú resuelve el caso general en dos líneas. Se evaluó también limpiar la pantalla antes de dibujar el menú; se descartó porque borraría el historial de la sesión, útil durante la demostración, y porque depende del sistema operativo.
+
+`pausar()` no captura `EOFError`: si la entrada se agota, la excepción llega al manejador de `mostrar_menu()`, que cierra la sesión ordenadamente en lugar de dejar el menú en un bucle infinito.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 94 pruebas en verde. Las dos nuevas verifican que tras ejecutar una opción se pide exactamente una tecla con el mensaje correspondiente y que el resultado impreso sigue presente, y que salir con `0` o escribir una opción inválida no pausa.
+- Prueba manual con la cuenta `mmorales` sobre una copia de la base: el listado de proyectos permanece visible hasta presionar Enter.

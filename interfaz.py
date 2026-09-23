@@ -91,6 +91,7 @@ MENSAJE_PROYECTO_INEXISTENTE = "El proyecto indicado no existe."
 MENSAJE_DEPARTAMENTO_INEXISTENTE = "El departamento indicado no existe."
 MENSAJE_ENTER_CONSERVA = "Enter conserva el valor actual."
 MENSAJE_CANCELADO = "Operacion cancelada."
+MENSAJE_VOLVER = "\nPresione Enter para volver al menu... "
 CARPETA_INFORMES = DATABASE_PATH.with_name("informes")
 ROLES_GESTION = {"admin", "rrhh"}
 CONSULTA_EMPLEADO = "SELECT * FROM empleados WHERE rut = ?"
@@ -190,6 +191,16 @@ def leer_o_conservar(mensaje: str, actual: Any, convertir: Callable[[str], Any])
 			return convertir(valor)
 		except ValueError as error:
 			print(error)
+
+
+def pausar() -> None:
+	"""Espera a que la persona confirme antes de redibujar el menu.
+
+	Sin esta pausa el menu se imprime de inmediato y empuja hacia arriba el
+	resultado recien mostrado (un listado, un informe o un mensaje de error).
+	"""
+
+	input(MENSAJE_VOLVER)
 
 
 def confirmar(mensaje: str) -> bool:
@@ -1431,6 +1442,7 @@ def ejecutar_opcion_menu(opciones: list[OpcionMenu], opcion: str) -> bool:
 		print(MENSAJE_OPCION_INVALIDA)
 		return True
 	accion()
+	pausar()
 	return True
 
 
@@ -1473,6 +1485,7 @@ def mostrar_menu() -> None:
 				ErrorServicioExterno,
 			) as error:
 				print(f"No se pudo completar la operacion: {error}")
+				pausar()
 	except (EOFError, KeyboardInterrupt):
 		print("\nSesion finalizada por el usuario.")
 	finally:
