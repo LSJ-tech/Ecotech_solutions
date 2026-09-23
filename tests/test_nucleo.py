@@ -820,9 +820,79 @@ class PruebasBusquedas(unittest.TestCase):
 		self.assertNotIn("Verde", salida)
 		salida = ejecutar_con_entradas(lambda: ui.listar_departamentos_menu(self.connection), ["nada"])
 		self.assertIn("No hay departamentos que coincidan con 'nada'", salida)
-		salida = ejecutar_con_entradas(lambda: ui.listar_empleados_menu(self.connection, True), ["beto"])
+		salida = ejecutar_con_entradas(lambda: ui.listar_empleados_menu(self.connection, self.admin), ["beto"])
 		self.assertIn("Beto Rojas", salida)
 		self.assertNotIn("Ana", salida)
+
+
+class PruebasEnmascaradoRut(unittest.TestCase):
+	"""El cuerpo del RUT se oculta a quien no tiene permisos de gestión."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		self.empleado = empleado_completo()
+		main.guardar_empleado(self.connection, self.empleado)
+		self.otro = empleado_completo("9876543-3", "beto@x.cl")
+		main.guardar_empleado(self.connection, self.otro)
+		self.admin = main.Usuario(1, "admin", "Clave1234", rol="admin")
+		self.cuenta = main.Usuario(2, "aperez", "Clave1234", empleado=self.empleado, rol="empleado")
+
+	def tearDown(self):
+		self.connection.close()
+
+	def test_enmascara_el_cuerpo_y_conserva_el_verificador(self):
+		self.assertEqual(main.enmascarar_rut("12345678-5"), "****5678-5")
+		self.assertEqual(main.enmascarar_rut("9876543-3"), "***6543-3")
+		# El verificador queda a la vista porque se recalcula desde el cuerpo.
+		self.assertTrue(main.enmascarar_rut("11111111-1").endswith("-1"))
+		# Un cuerpo más corto que los dígitos visibles se devuelve sin cambios.
+		self.assertEqual(main.enmascarar_rut("123-6"), "123-6")
+
+	def test_un_empleado_ve_su_rut_completo_y_los_demas_enmascarados(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.listar_empleados_menu(self.connection, self.cuenta), [""]
+		)
+		self.assertIn(RUT, salida)                 # el propio, completo
+		self.assertIn("***6543-3", salida)         # el ajeno, enmascarado
+		self.assertNotIn("9876543-3", salida)
+		self.assertNotIn("Salario", salida)        # sigue sin ver datos personales
+
+	def test_gestion_ve_los_rut_completos(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.listar_empleados_menu(self.connection, self.admin), [""]
+		)
+		self.assertIn(RUT, salida)
+		self.assertIn("9876543-3", salida)
+		self.assertNotIn("*", salida)
+
+	def test_un_empleado_no_puede_confirmar_un_rut_buscandolo(self):
+		# Enmascarar no serviria si el RUT se pudiera verificar con una busqueda.
+		salida = ejecutar_con_entradas(
+			lambda: ui.listar_empleados_menu(self.connection, self.cuenta), ["9876543"]
+		)
+		self.assertIn("No hay empleados que coincidan", salida)
+		# Por nombre si encuentra, y lo muestra enmascarado.
+		salida = ejecutar_con_entradas(
+			lambda: ui.listar_empleados_menu(self.connection, self.cuenta), ["perez"]
+		)
+		self.assertIn("***6543-3", salida)
+		self.assertIn("beto@x.cl", salida)
+
+	def test_gestion_conserva_la_busqueda_por_rut(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.listar_empleados_menu(self.connection, self.admin), ["9876543"]
+		)
+		self.assertIn("9876543-3", salida)
+		self.assertNotIn(RUT, salida)
+
+	def test_una_cuenta_sin_ficha_no_ve_ningun_rut_completo(self):
+		sin_ficha = main.Usuario(3, "sinficha", "Clave1234", rol="empleado")
+		salida = ejecutar_con_entradas(
+			lambda: ui.listar_empleados_menu(self.connection, sin_ficha), [""]
+		)
+		for rut in (RUT, "9876543-3"):
+			self.assertNotIn(rut, salida)
 
 
 if __name__ == "__main__":

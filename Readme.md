@@ -8,7 +8,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **86 automatizadas** (`tests/test_nucleo.py` 58 · `tests/test_servicios_externos.py` 28), sin red, en verde |
+| Pruebas | **92 automatizadas** (`tests/test_nucleo.py` 64 · `tests/test_servicios_externos.py` 28), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
 | Trazabilidad | `VALIDACION_IA.md`: 47 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
@@ -70,7 +70,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 | 1 | Gestionar departamentos: crear, editar nombre, eliminar, asignar o cambiar gerente, asignar o cambiar el departamento de un empleado | admin, rrhh |
 | 2 | Listar o buscar departamentos por nombre (Enter lista todos) | todos |
 | 3 | Gestionar empleados: editar ficha (Enter conserva cada valor), eliminar | admin, rrhh |
-| 4 | Listar o buscar empleados por RUT, nombre o apellido (admin y rrhh ven además la ficha personal) | todos |
+| 4 | Listar o buscar empleados: `admin` y `rrhh` buscan por RUT, nombre o apellido y ven la ficha personal; un `empleado` busca por nombre o apellido y ve enmascarado el RUT de los demás | todos |
 | 5 | Gestionar proyectos: crear, editar, eliminar, asignar y desasignar empleados | admin, rrhh |
 | 6 | Listar proyectos | todos |
 | 7 | Registrar horas trabajadas con descripción de la tarea (los empleados, solo las propias) | todos |
@@ -88,7 +88,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 
 Comportamientos que conviene conocer al probar:
 
-- **RUT**: se pide con el formato `12345678-5` (cuerpo, guion y dígito verificador); el sistema normaliza puntos y espacios y rechaza un dígito verificador incorrecto.
+- **RUT**: se pide con el formato `12345678-5` (cuerpo, guion y dígito verificador); el sistema normaliza puntos y espacios y rechaza un dígito verificador incorrecto. En el listado, un `empleado` ve el RUT de sus compañeros como `****5678-5` y el suyo completo.
 - **Edición campo por campo**: cada campo muestra su valor actual `[así]`; Enter lo conserva; un valor inválido repite solo ese campo, nunca el formulario completo.
 - **Eliminaciones confirmadas** (`s/n`) e informadas: eliminar un proyecto borra sus asignaciones y horas; eliminar un empleado borra también su cuenta; un departamento con empleados no se puede eliminar; desasignar de un proyecto **conserva** las horas ya registradas.
 - **Búsqueda** parcial sin distinguir mayúsculas; `%` y `_` se tratan como texto.
@@ -106,7 +106,7 @@ Ecotech_solutions/
 ├── interfaz.py                     consola: menús, lectura validada de entradas, permisos por rol
 ├── requirements.txt · .env.example configuración
 ├── tests/
-│   ├── test_nucleo.py              58 pruebas del núcleo y de los flujos de menú
+│   ├── test_nucleo.py              64 pruebas del núcleo y de los flujos de menú
 │   └── test_servicios_externos.py  28 pruebas de los servicios externos (sin red)
 ├── docs/
 │   ├── uml.mmd · uml.png           modelo vigente: diagrama de clases (Mermaid y su render)
@@ -163,7 +163,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | Criterio | Evidencia |
 |---|---|
 | **3.1.1** Consumo de APIs con librerías oficiales | `requests.Session` en `ClienteHTTP`; OpenWeatherMap (`/weather`, métrico, español) y mindicador.cl (`/api/{codigo}`); JSON validado en tipo y rango (temperatura, humedad, descripción; valor, fecha, moneda); datos usados en las opciones 11, 12 y 13. |
-| **3.1.2** Autenticación y validación de entradas | Login PBKDF2 con rechazo de credenciales vacías; política de contraseñas; `validar_ciudad()` (letras, espacios y guiones) y lista blanca `INDICADORES_PERMITIDOS`; llaves y códigos solo en `.env`; `hmac.compare_digest`; solo usuarios autenticados llegan al menú. |
+| **3.1.2** Autenticación y validación de entradas | Login PBKDF2 con rechazo de credenciales vacías; política de contraseñas; RUT ajeno enmascarado para el rol `empleado`; `validar_ciudad()` (letras, espacios y guiones) y lista blanca `INDICADORES_PERMITIDOS`; llaves y códigos solo en `.env`; `hmac.compare_digest`; solo usuarios autenticados llegan al menú. |
 | **3.1.3** Manejo de errores en servicios externos | 401/403, 404, 429, 5xx, otros códigos, timeout, sin conexión, cuerpo no JSON y respuestas > 1 MB → `ErrorServicioExterno` con mensaje genérico (sin URL ni llave); un reintento ante 5xx/timeout; respaldo local con aviso; el menú captura y continúa. Registro técnico en `ecotech.log` sin secretos. |
 | **3.1.4** Ajuste de seguridad con apoyo de IA | Cambios 27-34: se descartaron valores por defecto para secretos, `except Exception` genérico, `str(error)` al usuario, peticiones sin `timeout`, caché con expiración; se agregaron límite de tamaño, HTTPS obligatorio y logging sin llave (verificado por prueba). |
 
@@ -194,7 +194,13 @@ Si falta un código de rol, el sistema lo informa sin revelar ningún valor. La 
 
 `CifradorDatos` envuelve `cryptography.fernet.Fernet` (AES-128-CBC + HMAC-SHA256, IV aleatorio por valor). Dirección, teléfono y salario se cifran antes de cada `INSERT`/`UPDATE` y se descifran al leer; en la base solo existen tokens `gAAAAA…`. RUT, nombre y correo permanecen en claro porque son identificadores y se usan en búsquedas. Una clave incorrecta produce un mensaje claro sin exponer datos; valores heredados en texto plano se cifran automáticamente al iniciar. Los datos personales solo se muestran a `admin` y `rrhh`.
 
-### 6.4 Validación de entradas
+### 6.4 Enmascarado del RUT
+
+`enmascarar_rut()` oculta el **cuerpo** del RUT y deja a la vista sus últimos cuatro dígitos y el verificador (`12345678-5` → `****5678-5`). Se enmascara el cuerpo y no el dígito verificador porque este se calcula desde el cuerpo con el algoritmo módulo 11: ocultarlo no protegería nada, mientras que el cuerpo es lo que identifica a la persona. Los últimos dígitos quedan visibles para que cada quien reconozca su propia ficha.
+
+Se aplica solo a quien no tiene permisos de gestión: `admin` y `rrhh` ven los RUT completos porque los escriben para asignar departamentos, registrar horas o calcular pagos. Además, un `empleado` solo puede buscar por nombre o apellido (`listar_empleados(..., buscar_por_rut=False)`): si pudiera buscar por RUT, bastaría escribir uno para confirmarlo y el enmascarado sería solo visual. El enmascarado es de presentación; la base guarda el RUT completo, que sigue siendo clave foránea de asignaciones y registros.
+
+### 6.5 Validación de entradas
 
 RUT chileno con dígito verificador; nombres solo con letras; correo con formato básico; teléfono con patrón; montos y horas positivos (horas ≤ 24); fechas ISO y fecha de fin no anterior al inicio; descripción de tarea ≤ 200 caracteres; ciudad e indicador validados antes de salir a la red. Toda consulta SQL es parametrizada y las búsquedas escapan los comodines de `LIKE`.
 
@@ -215,7 +221,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 
 | Suite | Pruebas | Cubre |
 |---|---|---|
-| `tests/test_nucleo.py` | 58 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
+| `tests/test_nucleo.py` | 64 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
 | `tests/test_servicios_externos.py` | 28 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.

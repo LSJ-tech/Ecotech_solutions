@@ -39,6 +39,7 @@ from main import (
 	construir_informe_empleados,
 	construir_informe_proyectos,
 	construir_informe_registros,
+	enmascarar_rut,
 	contar_registros_proyecto,
 	desasignar_empleado_proyecto_bd,
 	fila_a_empleado,
@@ -715,12 +716,30 @@ def listar_departamentos_menu(connection: sqlite3.Connection) -> None:
 	)
 
 
-def mostrar_empleados(
-	connection: sqlite3.Connection, detallado: bool = False, filtro: str | None = None
-) -> None:
-	"""Muestra los empleados (todos o filtrados); los datos personales solo si detallado es True."""
+def rut_para_mostrar(rut: str, usuario_actual: Usuario | None) -> str:
+	"""Devuelve el RUT completo salvo que lo consulte un empleado y no sea el suyo."""
 
-	empleados = listar_empleados(connection, filtro)
+	if usuario_actual is None or usuario_actual.rol in ROLES_GESTION:
+		return rut
+	propio = usuario_actual.empleado.rut if usuario_actual.empleado else None
+	return rut if rut == propio else enmascarar_rut(rut)
+
+
+def mostrar_empleados(
+	connection: sqlite3.Connection,
+	detallado: bool = False,
+	filtro: str | None = None,
+	usuario_actual: Usuario | None = None,
+) -> None:
+	"""Muestra los empleados (todos o filtrados).
+
+	Los datos personales se incluyen solo si detallado es True. Con usuario_actual
+	informado, un rol sin permisos de gestión ve enmascarado el RUT de los demás;
+	las llamadas internas, todas dentro de flujos de gestión, lo omiten.
+	"""
+
+	gestion = usuario_actual is None or usuario_actual.rol in ROLES_GESTION
+	empleados = listar_empleados(connection, filtro, buscar_por_rut=gestion)
 	if not empleados:
 		print(
 			f"No hay empleados que coincidan con '{filtro}'."
@@ -730,7 +749,7 @@ def mostrar_empleados(
 		return
 	for empleado in empleados:
 		linea = (
-			f"{empleado['id_empleado']}. {empleado['rut']}: "
+			f"{empleado['id_empleado']}. {rut_para_mostrar(empleado['rut'], usuario_actual)}: "
 			f"{empleado['nombre']} {empleado['apellido']} | {empleado['cargo']} | "
 			f"{empleado['correo']} | Departamento: {empleado['departamento'] or 'Sin asignar'}"
 		)
@@ -747,13 +766,21 @@ def mostrar_empleados(
 		print(linea)
 
 
-def listar_empleados_menu(connection: sqlite3.Connection, detallado: bool) -> None:
-	"""Lista todos los empleados o busca por RUT, nombre o apellido."""
+def listar_empleados_menu(connection: sqlite3.Connection, usuario_actual: Usuario) -> None:
+	"""Lista todos los empleados o busca por RUT, nombre o apellido.
 
+	La búsqueda se resuelve en la base con el RUT completo, de modo que enmascarar
+	lo que se muestra no impide encontrar a nadie.
+	"""
+
+	gestion = usuario_actual.rol in ROLES_GESTION
+	# Quien no puede ver el RUT ajeno tampoco lo busca: evita confirmar uno adivinado.
+	campos = "RUT, nombre o apellido" if gestion else "nombre o apellido"
 	mostrar_empleados(
 		connection,
-		detallado,
-		leer_filtro("Buscar por RUT, nombre o apellido (Enter para listar todos): "),
+		gestion,
+		leer_filtro(f"Buscar por {campos} (Enter para listar todos): "),
+		usuario_actual,
 	)
 
 
@@ -1356,7 +1383,7 @@ def construir_opciones_menu(
 		("3", "Gestionar empleados", gestion,
 			lambda: gestionar_empleados_menu(connection, usuario_actual)),
 		("4", "Listar o buscar empleados", True,
-			lambda: listar_empleados_menu(connection, detallado=gestion)),
+			lambda: listar_empleados_menu(connection, usuario_actual)),
 		("5", "Gestionar proyectos", gestion,
 			lambda: gestionar_proyectos_menu(connection, usuario_actual)),
 		("6", "Listar proyectos", True, lambda: mostrar_proyectos(connection)),

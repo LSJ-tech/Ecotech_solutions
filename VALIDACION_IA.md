@@ -64,13 +64,14 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 49)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 50)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
   - [Cambio 47 - Estructura del repositorio](#cambio-47---estructura-del-repositorio)
   - [Cambio 48 - Ficha de empleado obligatoria para toda cuenta](#cambio-48---ficha-de-empleado-obligatoria-para-toda-cuenta)
   - [Cambio 49 - RUT de ejemplo genérico en la interfaz](#cambio-49---rut-de-ejemplo-genérico-en-la-interfaz)
+  - [Cambio 50 - Enmascarado del RUT para roles sin gestión](#cambio-50---enmascarado-del-rut-para-roles-sin-gestión)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1309,7 +1310,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 49)
+## Fase 5 - Documentación y cierre (cambios 44 a 50)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1436,3 +1437,28 @@ Se pidió usar `12345678-9`, pero ese valor tiene el dígito verificador incorre
 
 - `py -3 -m unittest discover -s tests -t .`: 86 pruebas en verde (ninguna dependía del texto del mensaje).
 - `py -3 -c "import main; main.validar_rut('12345678-5')"` devuelve el RUT normalizado; `12345678-9` se rechaza por dígito verificador.
+
+### Cambio 50 - Enmascarado del RUT para roles sin gestión
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `main.py`, `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`
+**Objetivo:** que un `empleado` no vea el RUT completo de sus compañeros en el listado, en línea con el requisito de seguridad de datos personales de la guía de la Unidad 1 y con el criterio 3.1.2.
+
+#### Implementación
+
+- `enmascarar_rut()` en `main.py` reemplaza el cuerpo del RUT por asteriscos y conserva los últimos `DIGITOS_RUT_VISIBLES` (4) y el dígito verificador: `12345678-5` queda como `****5678-5`.
+- `rut_para_mostrar()` en la interfaz decide caso a caso: devuelve el RUT completo si quien consulta tiene permisos de gestión o si es su propia ficha, y enmascarado en cualquier otro caso. `mostrar_empleados()` recibe `usuario_actual` solo desde la opción 4 del menú; las demás llamadas están dentro de flujos de gestión y conservan el comportamiento anterior.
+- `listar_empleados()` acepta `buscar_por_rut`. Para un `empleado` el filtro compara únicamente nombre y apellido, y el mensaje del menú lo refleja ("Buscar por nombre o apellido").
+- Una cuenta sin ficha asociada no tiene RUT propio, de modo que ve todos los RUT enmascarados.
+
+#### Revisión técnica
+
+- La propuesta inicial era enmascarar el **dígito verificador**. Se descartó tras analizarla: el verificador es una función determinista del cuerpo (módulo 11), y el propio `validar_rut()` del proyecto lo calcula, así que ocultarlo no impide reconstruir el RUT completo. Es seguridad por oscuridad. Se enmascara el cuerpo, que es el dato identificatorio, y se conserva el verificador junto con los últimos cuatro dígitos para que cada persona reconozca su ficha.
+- Al probar el cambio en vivo se detectó que el enmascarado quedaba sin efecto: la búsqueda del menú aceptaba un RUT completo y confirmaba a quién pertenecía. Por eso se agregó `buscar_por_rut`, sin el cual la protección era solo visual.
+- Se evaluó ocultar por completo el RUT ajeno. Se mantuvo el enmascarado parcial porque los últimos dígitos permiten distinguir homónimos y reconocer la ficha propia sin exponer el identificador.
+- El enmascarado es solo de presentación: la base guarda el RUT completo, que sigue siendo clave foránea de asignaciones y registros.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 92 pruebas en verde. Las seis nuevas verifican el formato del enmascarado (incluido un cuerpo más corto que los dígitos visibles, que se devuelve sin cambios), que un empleado ve su RUT completo y los ajenos enmascarados, que gestión los ve completos, que un empleado no encuentra a nadie buscando por RUT pero sí por apellido, que gestión conserva la búsqueda por RUT y que una cuenta sin ficha no ve ningún RUT completo.
+- Prueba manual con dos cuentas sobre una base nueva: `admin` busca `19616711` y obtiene la ficha completa; la empleada `aperez` obtiene "No hay empleados que coincidan" con el mismo texto y, buscando `silva`, ve `****6711-0`.

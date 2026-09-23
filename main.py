@@ -35,6 +35,7 @@ ROLES_VALIDOS = {"admin", "empleado", "rrhh"}
 CAMPO_NOMBRE_DEPARTAMENTO = "El nombre del departamento"
 LARGO_MAXIMO_DESCRIPCION_TAREA = 200
 LARGO_MINIMO_CONTRASENA = 8
+DIGITOS_RUT_VISIBLES = 4
 CODIFICACION = "utf-8"
 # Valor hora según la fórmula de la Dirección del Trabajo: sueldo mensual / 30 x 7 / jornada semanal.
 JORNADA_SEMANAL_HORAS = 44
@@ -181,6 +182,20 @@ def verificar_codigo_rol(rol: str, codigo: str) -> bool:
 	"""Compara el código ingresado en tiempo constante para evitar fugas por tiempo."""
 
 	return hmac.compare_digest(codigo.encode(CODIFICACION), obtener_codigo_rol(rol).encode(CODIFICACION))
+
+
+def enmascarar_rut(rut: str) -> str:
+	"""Oculta el cuerpo del RUT y deja a la vista sus últimos dígitos y el verificador.
+
+	Se enmascara el cuerpo y no el dígito verificador porque este se calcula a
+	partir del cuerpo (módulo 11): ocultarlo no protegería nada, mientras que el
+	cuerpo es lo que identifica a la persona. Se dejan los últimos dígitos para
+	que cada quien reconozca su propia ficha sin exponer el RUT completo.
+	"""
+
+	cuerpo, separador, digito = str(rut).partition("-")
+	visibles = cuerpo[-DIGITOS_RUT_VISIBLES:]
+	return f"{'*' * (len(cuerpo) - len(visibles))}{visibles}{separador}{digito}"
 
 
 def validar_ciudad_opcional(valor: str | None) -> str | None:
@@ -633,9 +648,13 @@ def patron_busqueda(texto: str) -> str:
 
 
 def listar_empleados(
-	connection: sqlite3.Connection, filtro: str | None = None
+	connection: sqlite3.Connection, filtro: str | None = None, buscar_por_rut: bool = True
 ) -> list[dict[str, Any]]:
-	"""Devuelve los empleados (todos o los que coinciden por RUT, nombre o apellido) descifrados."""
+	"""Devuelve los empleados, todos o los que coinciden con el filtro, descifrados.
+
+	Con buscar_por_rut en False el filtro solo compara nombre y apellido: asi quien
+	no puede ver el RUT de otros tampoco puede confirmarlo buscandolo.
+	"""
 
 	consulta = """
 		SELECT e.id_empleado, e.rut, e.nombre, e.apellido, e.correo, e.cargo,
@@ -648,11 +667,13 @@ def listar_empleados(
 	parametros: tuple[str, ...] = ()
 	if filtro is not None and filtro.strip():
 		patron = patron_busqueda(filtro)
-		consulta += (
-			" WHERE e.rut LIKE ? ESCAPE '\\' OR e.nombre LIKE ? ESCAPE '\\'"
-			" OR e.apellido LIKE ? ESCAPE '\\'"
+		columnas = ["e.nombre", "e.apellido"]
+		if buscar_por_rut:
+			columnas.insert(0, "e.rut")
+		consulta += " WHERE " + " OR ".join(
+			f"{columna} LIKE ? ESCAPE '\\'" for columna in columnas
 		)
-		parametros = (patron, patron, patron)
+		parametros = tuple(patron for _ in columnas)
 	consulta += " ORDER BY e.apellido, e.nombre"
 	return [descifrar_fila_empleado(fila) for fila in connection.execute(consulta, parametros)]
 
@@ -1611,6 +1632,7 @@ __all__ = [
 	"desasignar_empleado_proyecto_bd",
 	"descifrar_fila_empleado",
 	"descifrar_valor",
+	"enmascarar_rut",
 	"eliminar_departamento",
 	"eliminar_empleado",
 	"eliminar_proyecto",
