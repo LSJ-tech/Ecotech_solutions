@@ -10,7 +10,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
 | Pruebas | **100 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 29), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 47 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
+| Trazabilidad | `VALIDACION_IA.md`: 56 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -105,7 +105,7 @@ Comportamientos que conviene conocer al probar:
 ```text
 Ecotech_solutions/
 ├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
-├── VALIDACION_IA.md                registro técnico de los 47 cambios y del uso de IA
+├── VALIDACION_IA.md                registro técnico de los 56 cambios y del uso de IA
 ├── datos_ejemplo.py                genera una base de demostración con datos ficticios
 ├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
 ├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
@@ -164,7 +164,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 47 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 56 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
@@ -250,6 +250,11 @@ Cada una está justificada en el cambio indicado de `VALIDACION_IA.md`.
 | Valor hora con la fórmula de la Dirección del Trabajo (44 h) | Convención legal vigente en Chile, en lugar de dividir por 180 | 36 |
 | Primer usuario forzado a `admin`; sin autoregistro posterior | La guía asigna el registro a RR.HH.; sin un admin nadie podría crear cuentas | 38 |
 | Política de contraseñas aplicada al persistir, no en el constructor | `Usuario` también representa la sesión y filas con hash | 42 |
+| Enmascarar el **cuerpo** del RUT y no el dígito verificador | El verificador se recalcula desde el cuerpo con módulo 11: ocultarlo no protegería nada | 50 |
+| Un `empleado` no puede buscar por RUT | Si pudiera, bastaría escribir uno para confirmarlo y el enmascarado sería solo visual | 50 |
+| Timeout por servicio (20 s para indicadores, 8 s para clima) | Medidos: mindicador.cl responde entre 5 y 8 s y OpenWeatherMap en 0,7 s | 53 |
+| Correo derivado del nombre de usuario y no editable | Son el mismo identificador en dos formatos; editar uno los desalinearía | 54, 55 |
+| Clave de cifrado publicada solo para la base de demostración | Sus datos son ficticios; la clave de trabajo del equipo sigue fuera del repositorio | 56 |
 
 ## 10. Uso de IA y registro de cambios
 
