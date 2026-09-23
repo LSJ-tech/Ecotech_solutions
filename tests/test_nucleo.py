@@ -321,15 +321,33 @@ class PruebasAcceso(unittest.TestCase):
 		salida = ejecutar_con_entradas(lambda: ui.mostrar_menu_acceso(False), ["0"])
 		self.assertIn("2. Registrar administrador inicial", salida)
 
-	def test_primer_usuario_se_crea_como_admin_sin_preguntar_rol(self):
+	def test_primer_usuario_se_crea_como_admin_con_su_ficha(self):
 		salida = ejecutar_con_entradas(
 			lambda: ui.procesar_opcion_acceso(self.connection, "2", False),
-			["Ana", "Perez", "Soto"],  # no se pide rol: contraseña y código vienen simulados
+			# No se pide rol (contraseña y código vienen simulados), pero sí la ficha completa.
+			["Ana", "Perez", "Soto", RUT, "ana@x.cl", "Jefa de proyectos", "Av. Uno 1",
+			 "+56 9 1234 5678", "2025-03-01", "1200000"],
 		)
 		self.assertIn("debe ser administrador", salida)
 		self.assertIn("Su usuario es: aperez", salida)
-		fila = self.connection.execute("SELECT rol FROM usuarios").fetchone()
-		self.assertEqual(fila["rol"], "admin")
+		fila = self.connection.execute("SELECT rol, rut_empleado FROM usuarios").fetchone()
+		self.assertEqual((fila["rol"], fila["rut_empleado"]), ("admin", RUT))
+		# La cuenta admin queda vinculada a una ficha real, con su ID automático.
+		empleado = main.listar_empleados(self.connection)[0]
+		self.assertEqual((empleado["rut"], empleado["cargo"]), (RUT, "Jefa de proyectos"))
+		self.assertEqual(empleado["id_empleado"], 1)
+
+	def test_el_rut_invalido_se_repite_sin_reiniciar_el_formulario(self):
+		salida = ejecutar_con_entradas(
+			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="admin"),
+			["Ana", "Perez", "Soto", "12345678-9", RUT, "ana@x.cl", "Dev", "Av. Uno 1",
+			 "+56 9 1234 5678", "2025-03-01", "1200000"],
+		)
+		self.assertIn("dígito verificador", salida)
+		self.assertIn("Su usuario es: aperez", salida)
+		self.assertEqual(
+			self.connection.execute("SELECT rut_empleado FROM usuarios").fetchone()[0], RUT
+		)
 
 	def test_con_usuarios_no_hay_autoregistro(self):
 		main.guardar_usuario(self.connection, main.Usuario(0, "admin", "Clave1234", rol="admin"))
@@ -753,7 +771,8 @@ class PruebasPoliticaContrasenas(unittest.TestCase):
 		ui.leer_contrasena = lambda mensaje: "1234" if "Codigo" in mensaje else "Clave1234"
 		salida = ejecutar_con_entradas(
 			lambda: ui.registrar_usuario_menu(self.connection, rol_forzado="admin"),
-			["Logan", "Silva", "Jara"],
+			["Logan", "Silva", "Jara", RUT, "logan@x.cl", "Admin", "Av. Uno 1",
+			 "+56 9 1234 5678", "2025-03-01", "1200000"],
 		)
 		self.assertIn("lsilva", salida)
 

@@ -64,11 +64,12 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 47)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 48)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
   - [Cambio 47 - Estructura del repositorio](#cambio-47---estructura-del-repositorio)
+  - [Cambio 48 - Ficha de empleado obligatoria para toda cuenta](#cambio-48---ficha-de-empleado-obligatoria-para-toda-cuenta)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1307,7 +1308,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 47)
+## Fase 5 - Documentación y cierre (cambios 44 a 48)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1392,3 +1393,30 @@ Se evaluó mover también los módulos a `src/` y renombrar `Readme.md` como `RE
 
 - `py -3 -m unittest discover -s tests -t .`: 85 pruebas en verde desde la nueva ubicación, antes y después de mover los archivos.
 - `git mv` conserva el historial de cada archivo.
+
+### Cambio 48 - Ficha de empleado obligatoria para toda cuenta
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`
+**Objetivo:** corregir que el registro de una cuenta `admin` no pidiera el RUT ni el resto de la ficha. Se detectó al probar el primer arranque: el administrador inicial quedaba sin identificación de persona.
+
+#### Hallazgo
+
+`registrar_usuario_menu()` creaba la ficha solo cuando el rol era `empleado` o `rrhh`. Como el primer usuario es siempre `admin`, ese registro saltaba RUT, correo, cargo, dirección, teléfono, fecha de contrato y salario. La cuenta quedaba con `rut_empleado` nulo: no aparecía en el listado de empleados, no podía registrar sus propias horas ni calcular su pago, y nada la vinculaba a una persona.
+
+#### Implementación
+
+- La ficha pasa a ser obligatoria para cualquier rol: se eliminó la condición y con ella la rama que guardaba un usuario sin empleado, de modo que `registrar_usuario_menu()` siempre usa `guardar_usuario_con_empleado()`, que inserta empleado y usuario en una sola transacción. `guardar_usuario` salió del import de la interfaz (sigue en la API pública del núcleo, que la usan las pruebas).
+- El mensaje de confirmación informa el RUT de la ficha creada.
+- `Usuario.empleado` sigue admitiendo `None` en el modelo: representa también la sesión autenticada y las filas de cuentas anteriores a este cambio, que deben poder iniciar sesión.
+
+#### Revisión técnica
+
+El diseño anterior suponía que `admin` podía ser una cuenta técnica del sistema y no un trabajador de la empresa. Se revisó contra la guía de la Unidad 1, que modela a las personas como empleados con RUT e ID automático y no contempla cuentas sin persona; además, la asimetría producía efectos que un evaluador notaría en la demostración (el administrador no figuraba entre los empleados). Se evaluó pedir solo el RUT y dejar el resto vacío: se descartó porque la ficha incompleta obligaría a editarla después y porque `Empleado` ya exige correo y cargo. También se evaluó preguntar si se desea asociar una ficha: se descartó por dejar abierta la posibilidad de cuentas sin RUT, que es justamente el defecto corregido.
+
+Queda una limitación conocida: crear una cuenta para alguien que ya tiene ficha falla por el `UNIQUE` del RUT, porque este flujo siempre inserta un empleado nuevo. Es el mismo comportamiento que ya tenían `empleado` y `rrhh`; vincular una cuenta a una ficha existente sería una opción aparte del menú.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 86 pruebas en verde. La prueba del primer administrador ahora comprueba que la cuenta queda con `rut_empleado`, que el empleado aparece en el listado con su cargo y que recibe el `id_empleado` automático; la nueva prueba verifica que un RUT con dígito verificador incorrecto se repite sin reiniciar el formulario y que el registro termina con el RUT válido.
+- Prueba manual sobre una base nueva: el registro del administrador inicial solicita RUT, correo, cargo, dirección, teléfono, fecha de contrato y salario, y la opción 4 lo muestra en el listado de empleados.

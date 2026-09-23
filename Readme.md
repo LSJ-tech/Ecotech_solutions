@@ -8,7 +8,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **85 automatizadas** (`tests/test_nucleo.py` 57 · `tests/test_servicios_externos.py` 28), sin red, en verde |
+| Pruebas | **86 automatizadas** (`tests/test_nucleo.py` 58 · `tests/test_servicios_externos.py` 28), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
 | Trazabilidad | `VALIDACION_IA.md`: 47 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
@@ -53,7 +53,7 @@ py -3 main.py
 
 `.env` necesita cuatro valores (ver [§6.1](#61-configuración-segura-env)): `ECOTECH_CODIGO_ADMIN`, `ECOTECH_CODIGO_RRHH`, `OPENWEATHER_API_KEY` y `ECOTECH_CLAVE_CIFRADO`. La entrega comprimida incluye el `.env` del equipo.
 
-**Primer inicio.** El programa crea `ecotech_solutions.db` con sus tablas y ofrece `2. Registrar administrador inicial`: el primer usuario es siempre `admin` (exige `ECOTECH_CODIGO_ADMIN`) y su contraseña debe tener al menos 8 caracteres con letras y números. El nombre de usuario se genera con la inicial del nombre y el primer apellido (por ejemplo `lsilva`). Desde entonces las cuentas se crean únicamente dentro del sistema por `admin` o `rrhh` (opción 14). La opción `0` cierra el programa.
+**Primer inicio.** El programa crea `ecotech_solutions.db` con sus tablas y ofrece `2. Registrar administrador inicial`: el primer usuario es siempre `admin` (exige `ECOTECH_CODIGO_ADMIN`) y su contraseña debe tener al menos 8 caracteres con letras y números. Como toda cuenta pertenece a una persona de la empresa, también se pide su ficha de empleado (RUT, correo, cargo, dirección, teléfono, fecha de contrato y salario). El nombre de usuario se genera con la inicial del nombre y el primer apellido (por ejemplo `lsilva`). Desde entonces las cuentas se crean únicamente dentro del sistema por `admin` o `rrhh` (opción 14). La opción `0` cierra el programa.
 
 **Pruebas.**
 
@@ -80,7 +80,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 | 11 | Consultar clima de la ciudad de un proyecto (OpenWeatherMap) | todos |
 | 12 | Consultar indicador económico: dólar, euro o UF (mindicador.cl) | todos |
 | 13 | Calcular pago de un empleado en moneda extranjera | admin, rrhh |
-| 14 | Crear usuario (`empleado` y `rrhh` con ficha completa: dirección, teléfono, contrato, salario) | admin, rrhh |
+| 14 | Crear usuario con su ficha de empleado (RUT, correo, cargo, dirección, teléfono, contrato y salario), cualquiera sea el rol | admin, rrhh |
 | 15 | Listar usuarios | admin, rrhh |
 | 16 | Cambiar rol de usuario | admin |
 | 17 | Eliminar usuario | admin |
@@ -105,7 +105,7 @@ Ecotech_solutions/
 ├── interfaz.py                     consola: menús, lectura validada de entradas, permisos por rol
 ├── requirements.txt · .env.example configuración
 ├── tests/
-│   ├── test_nucleo.py              57 pruebas del núcleo y de los flujos de menú
+│   ├── test_nucleo.py              58 pruebas del núcleo y de los flujos de menú
 │   └── test_servicios_externos.py  28 pruebas de los servicios externos (sin red)
 ├── docs/
 │   ├── uml.mmd · uml.png           modelo vigente: diagrama de clases (Mermaid y su render)
@@ -135,7 +135,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 
 | Requisito de la guía | Implementación |
 |---|---|
-| Registro de empleados por RR.HH. con nombre, dirección, teléfono, correo, fecha de contrato, salario e ID automático | Opción 14; `empleados.id_empleado AUTOINCREMENT`; datos personales cifrados |
+| Registro de empleados por RR.HH. con nombre, dirección, teléfono, correo, fecha de contrato, salario e ID automático | Opción 14; toda cuenta (también `admin`) se crea con su ficha; `empleados.id_empleado AUTOINCREMENT`; datos personales cifrados |
 | Departamentos: crear, editar, buscar, eliminar; nombre y gerente | Submenú 1 y opción 2; `rut_gerente` es clave foránea a `empleados` con `ON DELETE SET NULL` |
 | Un solo departamento por empleado; asignación y reasignación | Columna única `id_departamento`; submenú 1 → 5 |
 | Registro de tiempo con fecha, horas y descripción, ligado a empleado y proyecto | Opción 7; `descripcion_tarea` (hasta 200 caracteres); exige asignación previa al proyecto |
@@ -214,7 +214,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 
 | Suite | Pruebas | Cubre |
 |---|---|---|
-| `tests/test_nucleo.py` | 57 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
+| `tests/test_nucleo.py` | 58 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
 | `tests/test_servicios_externos.py` | 28 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.

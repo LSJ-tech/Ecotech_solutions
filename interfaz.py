@@ -45,7 +45,6 @@ from main import (
 	guardar_departamento,
 	guardar_proyecto,
 	guardar_registro_tiempo,
-	guardar_usuario,
 	guardar_usuario_con_empleado,
 	eliminar_departamento,
 	eliminar_empleado,
@@ -568,27 +567,27 @@ def registrar_usuario_menu(
 	nombre_usuario = generar_nombre_usuario(
 		connection, nombre, primer_apellido, segundo_apellido
 	)
-	empleado = None
-	if rol in {"empleado", "rrhh"}:
-		rut_empleado = leer_rut()
-		empleado = Empleado(
-			rut_empleado,
-			nombre,
-			f"{primer_apellido} {segundo_apellido}",
-			leer_correo(),
-			leer_texto("Cargo: ", "El cargo"),
-			direccion=leer_texto("Direccion: ", "La dirección"),
-			telefono=leer_telefono(),
-			fecha_inicio_contrato=leer_fecha("Fecha de inicio de contrato (YYYY-MM-DD): "),
-			salario=leer_monto("Salario mensual en CLP: ", "El salario"),
-		)
+	# Toda cuenta pertenece a una persona de la empresa, también las de admin:
+	# sin ficha no habría RUT que la identifique ni podría registrar sus horas.
+	rut_empleado = leer_rut()
+	empleado = Empleado(
+		rut_empleado,
+		nombre,
+		f"{primer_apellido} {segundo_apellido}",
+		leer_correo(),
+		leer_texto("Cargo: ", "El cargo"),
+		direccion=leer_texto("Direccion: ", "La dirección"),
+		telefono=leer_telefono(),
+		fecha_inicio_contrato=leer_fecha("Fecha de inicio de contrato (YYYY-MM-DD): "),
+		salario=leer_monto("Salario mensual en CLP: ", "El salario"),
+	)
 
 	usuario = Usuario(0, nombre_usuario, contrasena, empleado=empleado, rol=rol)
-	if empleado:
-		guardar_usuario_con_empleado(connection, usuario, empleado)
-	else:
-		guardar_usuario(connection, usuario)
-	print(f"Usuario registrado correctamente. Su usuario es: {nombre_usuario}")
+	guardar_usuario_con_empleado(connection, usuario, empleado)
+	print(
+		f"Usuario registrado correctamente. Su usuario es: {nombre_usuario} "
+		f"(ficha de empleado {rut_empleado})."
+	)
 
 
 def autenticar_usuario(connection: sqlite3.Connection) -> Usuario | None:
