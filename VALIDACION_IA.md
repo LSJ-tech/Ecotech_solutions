@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 52)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 53)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -74,6 +74,7 @@ Cómo usar este documento:
   - [Cambio 50 - Enmascarado del RUT para roles sin gestión](#cambio-50---enmascarado-del-rut-para-roles-sin-gestión)
   - [Cambio 51 - Pausa antes de volver al menú](#cambio-51---pausa-antes-de-volver-al-menú)
   - [Cambio 52 - Submenús que se repiten hasta volver](#cambio-52---submenús-que-se-repiten-hasta-volver)
+  - [Cambio 53 - Tiempo de espera propio para mindicador.cl](#cambio-53---tiempo-de-espera-propio-para-mindicadorcl)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1312,7 +1313,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 52)
+## Fase 5 - Documentación y cierre (cambios 44 a 53)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1510,3 +1511,33 @@ La alternativa era pausar dentro de cada submenú sin avisar al llamador, lo que
 
 - `py -3 -m unittest discover -s tests -t .`: 95 pruebas en verde. La prueba del submenú ahora encadena dos acciones y comprueba que el título se vuelve a dibujar después de cada una; la nueva prueba entrega exactamente tres entradas (acción, pausa y volver) para verificar que no se pide un cuarto Enter.
 - Prueba manual con la cuenta `cfuentes`: se crea un departamento, se intenta eliminar uno con empleados (el error se informa) y en ambos casos se continúa en `GESTIONAR DEPARTAMENTOS` hasta elegir `0`.
+
+### Cambio 53 - Tiempo de espera propio para mindicador.cl
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `servicios_externos.py`, `tests/test_servicios_externos.py`, `Readme.md`
+**Objetivo:** corregir que la consulta de indicadores económicos fallara de forma intermitente con el mensaje "El servicio externo no respondió a tiempo".
+
+#### Diagnóstico
+
+El registro técnico `ecotech.log` mostró dos entradas seguidas, la consulta y su reintento:
+
+```
+09:17:48 WARNING Timeout al consultar https://mindicador.cl/api/dolar
+09:17:57 WARNING Timeout al consultar https://mindicador.cl/api/dolar
+```
+
+La tabla `consultas_clima` tenía datos de la misma sesión, de modo que la red funcionaba y el problema era del servicio de indicadores. Al medirlo directamente, mindicador.cl respondió en 4,9 s y 7,6 s en dos llamadas consecutivas, contra 0,7 s de OpenWeatherMap. El timeout general de 8 s quedaba justo en el límite: cuando el servicio superaba ese tiempo, un retraso se informaba como caída.
+
+#### Implementación
+
+`TIMEOUT_INDICADORES = 20` y `ServicioIndicadores` construye su `ClienteHTTP` con ese valor. El resto de los servicios conserva los 8 s. `ClienteHTTP` ya aceptaba el timeout como parámetro, así que el cambio no tocó el cliente.
+
+#### Revisión técnica
+
+Se evaluó subir el timeout general a 20 s: se descartó porque penalizaría al servicio de clima, que responde en menos de un segundo, y porque un valor único obligaría a elegir entre esperar de más o cortar antes de tiempo. Un timeout por servicio, medido, es la decisión que corresponde. Tampoco se aumentaron los reintentos: con 20 s el reintento sigue siendo la red de seguridad ante un corte puntual, y más intentos solo alargarían la espera antes de recurrir al respaldo local.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 96 pruebas en verde. La nueva comprueba que el servicio de indicadores use un timeout mayor que el general y que el de clima conserve el general.
+- Consulta real a mindicador.cl con el timeout nuevo: dólar observado $945,87, euro $1.081,49 y UF $40.999,93 (valores del 2026-09-23), respondidas entre 1,6 s y 2,2 s. Las tres quedaron guardadas en la tabla `indicadores`, de modo que el respaldo local puede responder si el servicio falla durante la demostración.

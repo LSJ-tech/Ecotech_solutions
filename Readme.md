@@ -8,7 +8,7 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **95 automatizadas** (`tests/test_nucleo.py` 67 · `tests/test_servicios_externos.py` 28), sin red, en verde |
+| Pruebas | **96 automatizadas** (`tests/test_nucleo.py` 67 · `tests/test_servicios_externos.py` 29), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
 | Trazabilidad | `VALIDACION_IA.md`: 47 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
@@ -109,7 +109,7 @@ Ecotech_solutions/
 ├── requirements.txt · .env.example configuración
 ├── tests/
 │   ├── test_nucleo.py              67 pruebas del núcleo y de los flujos de menú
-│   └── test_servicios_externos.py  28 pruebas de los servicios externos (sin red)
+│   └── test_servicios_externos.py  29 pruebas de los servicios externos (sin red)
 ├── docs/
 │   ├── uml.mmd · uml.png           modelo vigente: diagrama de clases (Mermaid y su render)
 │   ├── uml_original_unidad1.png    modelo inicial entregado en la Unidad 1
@@ -208,7 +208,7 @@ RUT chileno con dígito verificador; nombres solo con letras; correo con formato
 
 ## 7. Servicios externos
 
-- **`ClienteHTTP`**: `requests.Session`, HTTPS obligatorio, `timeout` de 8 s, un reintento ante timeout o 5xx, límite de 1 MB por respuesta, traducción de códigos HTTP y errores de red a `ErrorServicioExterno`. Los mensajes al usuario nunca incluyen URL, parámetros ni llave; el detalle técnico va a `ecotech.log` (los errores de `requests` se registran solo por tipo, porque su texto incluye la URL completa con la llave).
+- **`ClienteHTTP`**: `requests.Session`, HTTPS obligatorio, `timeout` de 8 s (20 s para mindicador.cl, que responde entre 5 y 8 s), un reintento ante timeout o 5xx, límite de 1 MB por respuesta, traducción de códigos HTTP y errores de red a `ErrorServicioExterno`. Los mensajes al usuario nunca incluyen URL, parámetros ni llave; el detalle técnico va a `ecotech.log` (los errores de `requests` se registran solo por tipo, porque su texto incluye la URL completa con la llave).
 - **`ServicioClima`** (OpenWeatherMap): temperatura, humedad y descripción de la ciudad del proyecto, con rangos plausibles verificados.
 - **`ServicioIndicadores`** (mindicador.cl, sin llave): último valor de la serie (`serie[0]`, orden descendente) para `dolar`, `euro` o `uf`; otros códigos se rechazan antes de la red porque la API responde 500 y se confundiría con una caída.
 - **Cálculo de pago**: `sumar_horas_empleado()` × `calcular_tarifa_hora()` (fórmula de la Dirección del Trabajo: sueldo / 30 × 7 / 44 h) → CLP → moneda del indicador. Resultado inmutable `Pago` con ambos montos y el tipo de cambio usado.
@@ -224,7 +224,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 | Suite | Pruebas | Cubre |
 |---|---|---|
 | `tests/test_nucleo.py` | 67 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
-| `tests/test_servicios_externos.py` | 28 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
+| `tests/test_servicios_externos.py` | 29 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.
 

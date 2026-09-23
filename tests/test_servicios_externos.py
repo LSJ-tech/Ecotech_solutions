@@ -282,5 +282,15 @@ class PruebasRespaldoLocal(unittest.TestCase):
 			se.consultar_con_respaldo(self.connection, servicio_sin_respaldo, "x")
 
 
+class PruebasTiempoDeEspera(unittest.TestCase):
+	"""Cada servicio espera segun lo que tarda realmente en responder."""
+
+	def test_los_indicadores_usan_un_timeout_mayor_que_el_general(self):
+		# mindicador.cl medido entre 4,9 y 7,6 s: con los 8 s generales fallaba de forma intermitente.
+		self.assertGreater(se.TIMEOUT_INDICADORES, se.TIMEOUT_SEGUNDOS)
+		self.assertEqual(se.ServicioIndicadores()._cliente._timeout, se.TIMEOUT_INDICADORES)
+		self.assertEqual(se.ServicioClima(llave="x")._cliente._timeout, se.TIMEOUT_SEGUNDOS)
+
+
 if __name__ == "__main__":
 	unittest.main()

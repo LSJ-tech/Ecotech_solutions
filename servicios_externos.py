@@ -19,6 +19,9 @@ T = TypeVar("T")
 
 
 TIMEOUT_SEGUNDOS = 8
+# mindicador.cl responde entre 5 y 8 segundos; con el timeout general
+# los tiempos de espera se confundian con una caida del servicio.
+TIMEOUT_INDICADORES = 20
 REINTENTOS_SERVIDOR = 1
 MAX_BYTES_RESPUESTA = 1_000_000
 MENSAJE_RESPUESTA_INVALIDA = "La respuesta del servicio externo no tiene el formato esperado."
@@ -218,7 +221,7 @@ class ServicioIndicadores(IServicioExterno):
 	URL_BASE = "https://mindicador.cl/api"
 
 	def __init__(self, cliente: ClienteHTTP | None = None) -> None:
-		self._cliente = cliente or ClienteHTTP(self.URL_BASE)
+		self._cliente = cliente or ClienteHTTP(self.URL_BASE, timeout=TIMEOUT_INDICADORES)
 
 	def consultar(self, criterio: str) -> Indicador:
 		codigo = validar_indicador(criterio)
