@@ -68,6 +68,7 @@ Cada punto corresponde a un criterio de la rúbrica.
 | Validación de entradas | Al crear un usuario, escribir el RUT `12345678-9` (dígito verificador incorrecto) o un teléfono con letras: se repite solo ese campo | 2.1.4 |
 | Manejo de errores | Escribir un número de opción que no aparece en el menú, o una fecha con formato inválido: el sistema informa y continúa | 2.1.4 |
 | Permisos por rol | Entrar como `mmorales` y comparar el menú con el de `lsilva`; escribir `14` (Crear usuario), que no está visible para ese rol | 3.1.2 |
+| Gestión de contraseñas | Con cualquier cuenta, opción 18: se exige la contraseña vigente y la nueva debe cumplir la política. Con `lsilva`, opción 19: restablecer la de otra cuenta | 3.1.2 |
 | Cifrado en reposo | Abrir `docs/demo/ecotech_demo.db` con cualquier visor SQLite: las columnas `direccion`, `telefono` y `salario` contienen tokens `gAAAAA…` | 3.1.2 |
 | Enmascarado del RUT | Con `mmorales`, opción 4: su RUT aparece completo y los de sus compañeros como `****4531-4` | 3.1.2 |
 | Informes exportados | Con `lsilva`, opción 10: elegir entidad y formato; el archivo queda en `informes/` | 2.1.2 |
@@ -81,4 +82,4 @@ Cada punto corresponde a un criterio de la rúbrica.
 py -3 -m unittest discover -s tests -t .
 ```
 
-Son 111 pruebas y no necesitan red ni base de datos: los servicios externos se simulan y las bases se crean en memoria.
+Son 117 pruebas y no necesitan red ni base de datos: los servicios externos se simulan y las bases se crean en memoria.

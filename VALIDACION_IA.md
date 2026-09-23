@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 60)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 61)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -82,6 +82,7 @@ Cómo usar este documento:
   - [Cambio 58 - Pruebas que vigilan la documentación](#cambio-58---pruebas-que-vigilan-la-documentación)
   - [Cambio 59 - Arranque en un comando tras clonar](#cambio-59---arranque-en-un-comando-tras-clonar)
   - [Cambio 60 - Servicio de clima sin llave](#cambio-60---servicio-de-clima-sin-llave)
+  - [Cambio 61 - Cambio y restablecimiento de contraseñas](#cambio-61---cambio-y-restablecimiento-de-contraseñas)
 
 ## Mapa por criterio de la rúbrica
 
@@ -379,7 +380,7 @@ Se agrego `__all__` a `main.py` con las entidades, validaciones y operaciones de
 
 **Fecha:** 2026-09-13
 **Archivo local:** `defensa_oral.py`
-**Objetivo:** preparar la defensa argumentativa de Maximiliano Montoya y Logan Silva sin incorporar el guion al producto publicado.
+**Objetivo:** preparar la defensa argumentativa de Maximiliano Montoya Miranda y Logan Silva Jara sin incorporar el guion al producto publicado.
 
 #### Implementación
 
@@ -1320,7 +1321,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 60)
+## Fase 5 - Documentación y cierre (cambios 44 a 61)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1734,3 +1735,28 @@ La validación de la respuesta se escribió aparte y no reutilizando la de OpenW
 - El `Readme.md` dejó de presentar `OPENWEATHER_API_KEY` como obligatoria: ahora la describe como opcional, tanto en el inicio rápido como en la tabla de variables de entorno.
 - Consulta real a Open-Meteo sin llave configurada: Calama 21,2 °C con cielo despejado, Temuco 10,9 °C con llovizna moderada y Valparaíso 17,7 °C nublado, en menos de un segundo por petición. Contrastado con OpenWeatherMap para Temuco (10,9 °C, 95 % de humedad) en la misma franja horaria.
 - `py -3 -m unittest discover -s tests -t .`: 111 pruebas en verde. Las siete nuevas cubren la consulta completa con geocodificación simulada, que el servicio no exija llave, la ciudad sin coordenadas, cinco formas de respuesta inválida o fuera de rango, los códigos WMO conocidos, agrupados y desconocidos, la elección automática de servicio según la llave, y que el registro técnico no escriba la ciudad consultada.
+
+### Cambio 61 - Cambio y restablecimiento de contraseñas
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `main.py`, `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`, `docs/CREDENCIALES_PRUEBA.md`
+**Objetivo:** cerrar una carencia detectada al usar el sistema: no había forma de cambiar una contraseña. `Usuario.actualizar_contrasena()` existía en el modelo desde el cambio 3, pero nada la persistía, de modo que quien olvidaba su clave quedaba sin acceso y ni siquiera un administrador podía devolvérselo.
+
+#### Implementación
+
+- `actualizar_contrasena_usuario()` en `main.py` guarda la contraseña nueva y devuelve si la cuenta existía. Pasa por `generar_hash_contrasena()`, así que aplica la misma política (mínimo 8 caracteres con letras y números) y el mismo hash con sal que al crear la cuenta; no hay una segunda ruta con reglas distintas.
+- Opción 18, para cualquier rol: cambia la contraseña de la sesión actual. Pide primero la vigente y la verifica, de modo que una sesión abierta y desatendida no permita apropiarse de la cuenta. La nueva se solicita con `leer_contrasena_nueva()`, que muestra la política y repite solo ese campo si no se cumple.
+- Opción 19, solo `admin`: restablece la contraseña de otra cuenta sin conocer la anterior, tras elegirla del listado y confirmar. Es el caso de la persona que olvidó su clave.
+
+#### Revisión técnica
+
+Se evaluó permitir que `rrhh` también restableciera contraseñas, por coherencia con su rol de gestión de personas. Se descartó: restablecer una clave permite entrar con la identidad de otra cuenta, incluida la de un administrador, y el proyecto ya reserva a `admin` las acciones que afectan a otras cuentas (cambiar rol, eliminar).
+
+Las dos opciones se agregaron al final del menú en lugar de intercalarlas junto a las de usuarios. La numeración proviene de una sola tabla y es fija por opción, no relativa al rol; renumerar habría invalidado la documentación, las pruebas y el material de la defensa sin beneficio para quien usa el sistema.
+
+Se consideró pedir la contraseña nueva dos veces para confirmarla. Se descartó porque la entrada se muestra enmascarada pero el sistema permite corregirla de inmediato desde la opción 18, y una confirmación adicional alargaba el formulario sin evitar un error real.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 117 pruebas en verde. Las seis nuevas verifican que el núcleo aplique la política y devuelva `False` ante una cuenta inexistente; que cambiar la propia exija la vigente y falle con una equivocada; que la nueva se repita hasta cumplir la política; que un administrador restablezca la de otra cuenta; que la operación se cancele con `n`, la rechace un rol que no es `admin` y avise si el usuario no existe; y que el menú ofrezca la opción 18 a todos y la 19 solo a `admin`.
+- Prueba manual: tras cambiar la contraseña, el ingreso con la anterior se rechaza y con la nueva funciona.

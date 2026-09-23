@@ -1033,6 +1033,24 @@ def actualizar_usuario(
 
 
 @revertir_si_falla
+def actualizar_contrasena_usuario(
+	connection: sqlite3.Connection, id_usuario: int, nueva_contrasena: str
+) -> bool:
+	"""Guarda la contraseña nueva de un usuario y devuelve si la cuenta existía.
+
+	Pasa por `generar_hash_contrasena()`, de modo que la política y el hash con
+	sal se aplican igual que al crear la cuenta.
+	"""
+
+	cursor = connection.execute(
+		"UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?",
+		(generar_hash_contrasena(nueva_contrasena), id_usuario),
+	)
+	connection.commit()
+	return cursor.rowcount == 1
+
+
+@revertir_si_falla
 def eliminar_usuario(connection: sqlite3.Connection, id_usuario: int) -> bool:
 	"""Elimina un usuario y su empleado asociado, si existe."""
 
@@ -1638,6 +1656,7 @@ __all__ = [
 	"RegistroTiempo",
 	"ServicioReportes",
 	"Usuario",
+	"actualizar_contrasena_usuario",
 	"actualizar_departamento",
 	"actualizar_empleado",
 	"actualizar_proyecto",

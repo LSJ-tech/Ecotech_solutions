@@ -25,6 +25,7 @@ from main import (
 	RegistroTiempo,
 	ServicioReportes,
 	Usuario,
+	actualizar_contrasena_usuario,
 	actualizar_departamento,
 	actualizar_empleado,
 	actualizar_proyecto,
@@ -1298,6 +1299,49 @@ def eliminar_usuario_admin_menu(
 	print("Usuario eliminado correctamente.")
 
 
+def cambiar_contrasena_propia_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Cambia la contraseña de la sesión actual, exigiendo antes la vigente."""
+
+	fila = connection.execute(
+		"SELECT contrasena FROM usuarios WHERE id_usuario = ?", (usuario_actual.id_usuario,)
+	).fetchone()
+	# Conocer la contraseña vigente evita que alguien cambie la de una sesión ajena
+	# dejada abierta.
+	if fila is None or not verificar_contrasena(
+		leer_contrasena("Contrasena actual: "), fila["contrasena"]
+	):
+		raise ValueError("La contraseña actual no es correcta.")
+	nueva = leer_contrasena_nueva("Contrasena nueva: ")
+	actualizar_contrasena_usuario(connection, usuario_actual.id_usuario, nueva)
+	print("Contrasena actualizada. Se usara en el proximo inicio de sesion.")
+
+
+def restablecer_contrasena_menu(
+	connection: sqlite3.Connection, usuario_actual: Usuario
+) -> None:
+	"""Permite a un administrador asignar una contraseña nueva a otra cuenta."""
+
+	if usuario_actual.rol != "admin":
+		raise PermissionError("Solo un administrador puede restablecer contrasenas.")
+	mostrar_usuarios(connection)
+	id_usuario = leer_entero("ID del usuario: ")
+	fila = connection.execute(
+		"SELECT nombre_usuario FROM usuarios WHERE id_usuario = ?", (id_usuario,)
+	).fetchone()
+	if fila is None:
+		raise ValueError("El usuario indicado no existe.")
+	if not confirmar(
+		f"Se asignara una contrasena nueva a {fila['nombre_usuario']}. Confirma?"
+	):
+		print(MENSAJE_CANCELADO)
+		return
+	nueva = leer_contrasena_nueva("Contrasena nueva: ")
+	actualizar_contrasena_usuario(connection, id_usuario, nueva)
+	print(f"Contrasena de {fila['nombre_usuario']} actualizada.")
+
+
 def mostrar_registros(registros: list[sqlite3.Row]) -> None:
 	"""Imprime registros de tiempo, una línea por registro."""
 
@@ -1430,6 +1474,10 @@ def construir_opciones_menu(
 		("16", "Cambiar rol de usuario", admin, lambda: cambiar_rol_menu(connection, usuario_actual)),
 		("17", "Eliminar usuario", admin,
 			lambda: eliminar_usuario_admin_menu(connection, usuario_actual)),
+		("18", "Cambiar mi contrasena", True,
+			lambda: cambiar_contrasena_propia_menu(connection, usuario_actual)),
+		("19", "Restablecer contrasena de un usuario", admin,
+			lambda: restablecer_contrasena_menu(connection, usuario_actual)),
 	]
 	return [(numero, texto, accion) for numero, texto, permitido, accion in opciones if permitido]
 

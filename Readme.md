@@ -2,15 +2,15 @@
 
 Aplicación de consola en **Python 3** con **SQLite** que gestiona empleados, departamentos, proyectos y registros de tiempo de EcoTech Solutions, con autenticación por roles, cifrado de datos personales, informes exportables y consumo de servicios externos (clima e indicadores económicos).
 
-Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (INACAP). Autores: **Logan Silva** y **Maximiliano Montoya**.
+Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (INACAP). Autores: **Logan Silva Jara** y **Maximiliano Montoya Miranda**.
 
 | | |
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **111 automatizadas** (`tests/test_nucleo.py` 71 · `tests/test_servicios_externos.py` 36 · `tests/test_documentacion.py` 4), sin red, en verde |
+| Pruebas | **117 automatizadas** (`tests/test_nucleo.py` 77 · `tests/test_servicios_externos.py` 36 · `tests/test_documentacion.py` 4), sin red, en verde |
 | Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 60 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
+| Trazabilidad | `VALIDACION_IA.md`: 61 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -98,6 +98,8 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 | 15 | Listar usuarios | admin, rrhh |
 | 16 | Cambiar rol de usuario | admin |
 | 17 | Eliminar usuario | admin |
+| 18 | Cambiar mi contraseña (pide la vigente antes de reemplazarla) | todos |
+| 19 | Restablecer la contraseña de otra cuenta | admin |
 | 0 | Salir | todos |
 
 Comportamientos que conviene conocer al probar:
@@ -117,7 +119,7 @@ Comportamientos que conviene conocer al probar:
 ```text
 Ecotech_solutions/
 ├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
-├── VALIDACION_IA.md                registro técnico de los 60 cambios y del uso de IA
+├── VALIDACION_IA.md                registro técnico de los 61 cambios y del uso de IA
 ├── datos_ejemplo.py                genera una base de demostración con datos ficticios
 ├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
 ├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
@@ -125,7 +127,7 @@ Ecotech_solutions/
 ├── requirements.txt · .env.example configuración
 ├── .env.demo                       configuración lista para la base de demostración
 ├── tests/
-│   ├── test_nucleo.py              71 pruebas del núcleo y de los flujos de menú
+│   ├── test_nucleo.py              77 pruebas del núcleo y de los flujos de menú
 │   ├── test_servicios_externos.py  36 pruebas de los servicios externos (sin red)
 │   └── test_documentacion.py        4 pruebas que contrastan esta guía con el proyecto
 ├── docs/
@@ -178,7 +180,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 60 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 61 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
@@ -210,6 +212,7 @@ Si falta un código de rol, el sistema lo informa sin revelar ningún valor. La 
 - Contraseñas con **PBKDF2-SHA256, sal aleatoria y 120 000 iteraciones**; nunca en texto plano. La entrada se enmascara con asteriscos.
 - **Política**: mínimo 8 caracteres con letras y números, aplicada en `generar_hash_contrasena()` (único punto por el que pasa toda contraseña persistida), en `Usuario.actualizar_contrasena()` y en el formulario. Los códigos de rol no están sujetos a ella porque son secretos de configuración.
 - El **primer usuario** es siempre `admin`; después no existe autoregistro: crear cuentas es función de RR.HH. dentro del sistema.
+- Cada persona cambia su contraseña desde la opción 18, que exige la vigente antes de reemplazarla; un `admin` puede restablecer la de otra cuenta (opción 19) sin conocer la anterior. Ambas pasan por la misma política y por el hash con sal.
 - Cada opción del menú tiene un permiso en una sola tabla (`construir_opciones_menu()`), de la que se derivan tanto el listado como la ejecución.
 
 ### 6.3 Cifrado de datos personales
@@ -244,7 +247,7 @@ py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 
 | Suite | Pruebas | Cubre |
 |---|---|---|
-| `tests/test_nucleo.py` | 71 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
+| `tests/test_nucleo.py` | 77 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
 | `tests/test_documentacion.py` | 4 | Contrasta esta guía con el proyecto: que cada cambio de `VALIDACION_IA.md` esté en su índice y en orden, que las cifras de cambios y de pruebas citadas aquí sean las reales y que los archivos mencionados existan. |
 | `tests/test_servicios_externos.py` | 36 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Para el servicio sin llave: geocodificación, traducción de códigos WMO, ciudad inexistente y elección automática de servicio. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 

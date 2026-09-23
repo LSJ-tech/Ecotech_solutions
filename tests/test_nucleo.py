@@ -658,7 +658,7 @@ class PruebasCrudCompleto(unittest.TestCase):
 		])
 		empleado = ui.construir_opciones_menu(self.connection, self.cuenta_empleado)
 		numeros = [numero for numero, _t, _a in empleado]
-		self.assertEqual(numeros, ["2", "4", "6", "7", "8", "9", "10", "11", "12"])
+		self.assertEqual(numeros, ["2", "4", "6", "7", "8", "9", "10", "11", "12", "18"])
 		self.assertIn(("9", "Editar o eliminar mis registros"), [(n, t) for n, t, _a in empleado])
 
 
@@ -1001,6 +1001,103 @@ class PruebasCorreoInstitucional(unittest.TestCase):
 		# Con el usuario ocupado se usa el segundo apellido, y el correo lo acompaña.
 		self.assertIn("Usuario: asoto", salida)
 		self.assertIn("Correo:  asoto@ecotech.cl", salida)
+
+
+class PruebasCambioDeContrasena(unittest.TestCase):
+	"""Cambiar la propia contrasena y restablecer la de otra cuenta."""
+
+	def setUp(self):
+		self.connection = main.conectar_bd(":memory:")
+		main.inicializar_bd(self.connection)
+		self.empleado = empleado_completo()
+		main.guardar_empleado(self.connection, self.empleado)
+		self.id_admin = main.guardar_usuario(
+			self.connection, main.Usuario(0, "admin", "Clave1234", rol="admin")
+		)
+		self.id_otro = main.guardar_usuario(
+			self.connection, main.Usuario(0, "aperez", "Otra12345", rol="empleado")
+		)
+		self.admin = main.Usuario(self.id_admin, "admin", "Clave1234", rol="admin")
+		self.otro = main.Usuario(self.id_otro, "aperez", "Otra12345", rol="empleado")
+
+	def tearDown(self):
+		self.connection.close()
+
+	def _clave_guardada(self, id_usuario):
+		return self.connection.execute(
+			"SELECT contrasena FROM usuarios WHERE id_usuario = ?", (id_usuario,)
+		).fetchone()[0]
+
+	def test_el_nucleo_guarda_la_contrasena_con_la_politica(self):
+		self.assertTrue(
+			main.actualizar_contrasena_usuario(self.connection, self.id_admin, "Nueva5678")
+		)
+		self.assertTrue(main.verificar_contrasena("Nueva5678", self._clave_guardada(self.id_admin)))
+		# La cuenta inexistente se informa; la contrasena debil se rechaza.
+		self.assertFalse(
+			main.actualizar_contrasena_usuario(self.connection, 99, "Nueva5678")
+		)
+		with self.assertRaisesRegex(ValueError, "8 caracteres"):
+			main.actualizar_contrasena_usuario(self.connection, self.id_admin, "corta1")
+		self.assertTrue(main.verificar_contrasena("Nueva5678", self._clave_guardada(self.id_admin)))
+
+	def test_cambiar_la_propia_exige_la_vigente(self):
+		claves = iter(["equivocada", "Clave1234", "Nueva5678"])
+		ui.leer_contrasena = lambda mensaje: next(claves)
+		with self.assertRaisesRegex(ValueError, "contraseña actual"):
+			ejecutar_con_entradas(
+				lambda: ui.cambiar_contrasena_propia_menu(self.connection, self.admin)
+			)
+		salida = ejecutar_con_entradas(
+			lambda: ui.cambiar_contrasena_propia_menu(self.connection, self.admin)
+		)
+		self.assertIn("actualizada", salida)
+		self.assertTrue(main.verificar_contrasena("Nueva5678", self._clave_guardada(self.id_admin)))
+
+	def test_la_contrasena_nueva_cumple_la_politica(self):
+		claves = iter(["Clave1234", "corta1", "Nueva5678"])
+		ui.leer_contrasena = lambda mensaje: next(claves)
+		salida = ejecutar_con_entradas(
+			lambda: ui.cambiar_contrasena_propia_menu(self.connection, self.admin)
+		)
+		self.assertIn("8 caracteres", salida)          # repitio solo ese campo
+		self.assertIn("actualizada", salida)
+
+	def test_el_admin_restablece_la_de_otra_cuenta(self):
+		ui.leer_contrasena = lambda mensaje: "Reinicio2026"
+		salida = ejecutar_con_entradas(
+			lambda: ui.restablecer_contrasena_menu(self.connection, self.admin),
+			[str(self.id_otro), "s"],
+		)
+		self.assertIn("aperez", salida)
+		self.assertTrue(
+			main.verificar_contrasena("Reinicio2026", self._clave_guardada(self.id_otro))
+		)
+
+	def test_restablecer_se_cancela_y_solo_lo_hace_un_admin(self):
+		ui.leer_contrasena = lambda mensaje: "Reinicio2026"
+		salida = ejecutar_con_entradas(
+			lambda: ui.restablecer_contrasena_menu(self.connection, self.admin),
+			[str(self.id_otro), "n"],
+		)
+		self.assertIn("cancelada", salida)
+		self.assertTrue(main.verificar_contrasena("Otra12345", self._clave_guardada(self.id_otro)))
+		with self.assertRaises(PermissionError):
+			ejecutar_con_entradas(
+				lambda: ui.restablecer_contrasena_menu(self.connection, self.otro)
+			)
+		with self.assertRaisesRegex(ValueError, "no existe"):
+			ejecutar_con_entradas(
+				lambda: ui.restablecer_contrasena_menu(self.connection, self.admin), ["99"]
+			)
+
+	def test_el_menu_ofrece_las_opciones_segun_el_rol(self):
+		opciones = {n: t for n, t, _a in ui.construir_opciones_menu(self.connection, self.admin)}
+		self.assertEqual(opciones["18"], "Cambiar mi contrasena")
+		self.assertEqual(opciones["19"], "Restablecer contrasena de un usuario")
+		propias = {n for n, _t, _a in ui.construir_opciones_menu(self.connection, self.otro)}
+		self.assertIn("18", propias)      # cualquiera cambia la suya
+		self.assertNotIn("19", propias)   # restablecer ajenas es solo de admin
 
 
 if __name__ == "__main__":
