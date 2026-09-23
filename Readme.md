@@ -88,6 +88,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 
 Comportamientos que conviene conocer al probar:
 
+- **RUT**: se pide con el formato `12345678-5` (cuerpo, guion y dígito verificador); el sistema normaliza puntos y espacios y rechaza un dígito verificador incorrecto.
 - **Edición campo por campo**: cada campo muestra su valor actual `[así]`; Enter lo conserva; un valor inválido repite solo ese campo, nunca el formulario completo.
 - **Eliminaciones confirmadas** (`s/n`) e informadas: eliminar un proyecto borra sus asignaciones y horas; eliminar un empleado borra también su cuenta; un departamento con empleados no se puede eliminar; desasignar de un proyecto **conserva** las horas ya registradas.
 - **Búsqueda** parcial sin distinguir mayúsculas; `%` y `_` se tratan como texto.

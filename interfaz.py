@@ -217,7 +217,7 @@ def leer_nombre(mensaje: str, campo: str) -> str:
 		print(f"{campo} solo puede contener letras y espacios.")
 
 
-def leer_rut(mensaje: str = "RUT (ejemplo: 19616711-0): ") -> str:
+def leer_rut(mensaje: str = "RUT (formato 12345678-5, con guion y digito verificador): ") -> str:
 	"""Solicita un RUT y lo valida antes de continuar."""
 
 	while True:

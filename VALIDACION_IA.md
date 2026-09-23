@@ -64,12 +64,13 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 48)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 49)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
   - [Cambio 47 - Estructura del repositorio](#cambio-47---estructura-del-repositorio)
   - [Cambio 48 - Ficha de empleado obligatoria para toda cuenta](#cambio-48---ficha-de-empleado-obligatoria-para-toda-cuenta)
+  - [Cambio 49 - RUT de ejemplo genérico en la interfaz](#cambio-49---rut-de-ejemplo-genérico-en-la-interfaz)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1308,7 +1309,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 48)
+## Fase 5 - Documentación y cierre (cambios 44 a 49)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1420,3 +1421,18 @@ Queda una limitación conocida: crear una cuenta para alguien que ya tiene ficha
 
 - `py -3 -m unittest discover -s tests -t .`: 86 pruebas en verde. La prueba del primer administrador ahora comprueba que la cuenta queda con `rut_empleado`, que el empleado aparece en el listado con su cargo y que recibe el `id_empleado` automático; la nueva prueba verifica que un RUT con dígito verificador incorrecto se repite sin reiniciar el formulario y que el registro termina con el RUT válido.
 - Prueba manual sobre una base nueva: el registro del administrador inicial solicita RUT, correo, cargo, dirección, teléfono, fecha de contrato y salario, y la opción 4 lo muestra en el listado de empleados.
+
+### Cambio 49 - RUT de ejemplo genérico en la interfaz
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `interfaz.py`, `Readme.md`
+**Objetivo:** el mensaje que solicita el RUT usaba `19616711-0`, un RUT que corresponde a una persona real. Se reemplazó por un ejemplo genérico que además describe el formato: `RUT (formato 12345678-5, con guion y digito verificador)`.
+
+#### Revisión técnica
+
+Se pidió usar `12345678-9`, pero ese valor tiene el dígito verificador incorrecto y `validar_rut()` lo rechaza: como ejemplo enseñaría un RUT que el propio sistema no acepta. El dígito correcto para el cuerpo `12345678` es `5`, que es además el que ya usaba el mensaje de error de `validar_rut()`, de modo que el ejemplo y el error quedan consistentes.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 86 pruebas en verde (ninguna dependía del texto del mensaje).
+- `py -3 -c "import main; main.validar_rut('12345678-5')"` devuelve el RUT normalizado; `12345678-9` se rechaza por dígito verificador.
