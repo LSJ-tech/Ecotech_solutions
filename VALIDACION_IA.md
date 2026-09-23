@@ -1731,5 +1731,6 @@ La validación de la respuesta se escribió aparte y no reutilizando la de OpenW
 
 #### Validación
 
+- El `Readme.md` dejó de presentar `OPENWEATHER_API_KEY` como obligatoria: ahora la describe como opcional, tanto en el inicio rápido como en la tabla de variables de entorno.
 - Consulta real a Open-Meteo sin llave configurada: Calama 21,2 °C con cielo despejado, Temuco 10,9 °C con llovizna moderada y Valparaíso 17,7 °C nublado, en menos de un segundo por petición. Contrastado con OpenWeatherMap para Temuco (10,9 °C, 95 % de humedad) en la misma franja horaria.
 - `py -3 -m unittest discover -s tests -t .`: 111 pruebas en verde. Las siete nuevas cubren la consulta completa con geocodificación simulada, que el servicio no exija llave, la ciudad sin coordenadas, cinco formas de respuesta inválida o fuera de rango, los códigos WMO conocidos, agrupados y desconocidos, la elección automática de servicio según la llave, y que el registro técnico no escriba la ciudad consultada.

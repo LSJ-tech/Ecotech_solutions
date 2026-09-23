@@ -65,7 +65,7 @@ py -3 -c "import main; print(main.generar_clave_cifrado())"   # pegar el resulta
 py -3 main.py
 ```
 
-`.env` necesita cuatro valores (ver [§6.1](#61-configuración-segura-env)): `ECOTECH_CODIGO_ADMIN`, `ECOTECH_CODIGO_RRHH`, `OPENWEATHER_API_KEY` y `ECOTECH_CLAVE_CIFRADO`. La entrega comprimida incluye el `.env` del equipo.
+`.env` necesita tres valores (ver [§6.1](#61-configuración-segura-env)): `ECOTECH_CODIGO_ADMIN`, `ECOTECH_CODIGO_RRHH` y `ECOTECH_CLAVE_CIFRADO`. `OPENWEATHER_API_KEY` es opcional: sin ella el clima se consulta en Open-Meteo, que no exige credencial.
 
 **Primer inicio.** El programa crea `ecotech_solutions.db` con sus tablas y ofrece `2. Registrar administrador inicial`: el primer usuario es siempre `admin` (exige `ECOTECH_CODIGO_ADMIN`) y su contraseña debe tener al menos 8 caracteres con letras y números. Como toda cuenta pertenece a una persona de la empresa, también se pide su ficha de empleado (RUT, cargo, dirección, teléfono, fecha de contrato y salario); el correo institucional se genera a partir del nombre de usuario. El nombre de usuario se genera con la inicial del nombre y el primer apellido (por ejemplo `lsilva`). Desde entonces las cuentas se crean únicamente dentro del sistema por `admin` o `rrhh` (opción 14). La opción `0` cierra el programa.
 
@@ -199,7 +199,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 |---|---|
 | `ECOTECH_CODIGO_ADMIN` | Código exigido para registrar una cuenta `admin`. |
 | `ECOTECH_CODIGO_RRHH` | Código exigido para registrar una cuenta `rrhh`. |
-| `OPENWEATHER_API_KEY` | Llave de OpenWeatherMap para el servicio de clima. |
+| `OPENWEATHER_API_KEY` | Opcional. Llave de OpenWeatherMap; sin ella el clima se consulta en Open-Meteo, que no la exige. |
 | `ECOTECH_CLAVE_CIFRADO` | Clave Fernet para dirección, teléfono y salario. Si se pierde, esos datos no se recuperan. |
 | `ECOTECH_DB_PATH` | Opcional: ruta de la base SQLite. |
 
