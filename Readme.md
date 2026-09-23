@@ -8,9 +8,9 @@ Proyecto de la asignatura **TI3V21 Programación Orientada a Objeto Seguro** (IN
 |---|---|
 | Lenguaje / BD | Python 3.10+ · `sqlite3` (librería estándar) |
 | Dependencias | `requests`, `python-dotenv`, `cryptography` |
-| Pruebas | **85 automatizadas** (`test_nucleo.py` 57 · `test_servicios_externos.py` 28), sin red, en verde |
-| Modelo | `uml.mmd` / `uml.png` — el código coincide con el diagrama |
-| Trazabilidad | `VALIDACION_IA.md`: 46 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
+| Pruebas | **85 automatizadas** (`tests/test_nucleo.py` 57 · `tests/test_servicios_externos.py` 28), sin red, en verde |
+| Modelo | `docs/uml.mmd` / `docs/uml.png` — el código coincide con el diagrama |
+| Trazabilidad | `VALIDACION_IA.md`: 47 cambios documentados, mapa por criterio de la rúbrica e inventario de fragmentos apoyados por IA |
 
 ## Índice
 
@@ -58,7 +58,7 @@ py -3 main.py
 **Pruebas.**
 
 ```powershell
-py -3 -m unittest -v test_nucleo test_servicios_externos
+py -3 -m unittest discover -s tests -t .
 ```
 
 ## 3. Funcionalidades y menú
@@ -98,21 +98,27 @@ Comportamientos que conviene conocer al probar:
 
 ```text
 Ecotech_solutions/
-├── main.py                    núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
-├── servicios_externos.py      cliente HTTP, servicios de clima e indicadores, respaldo local
-├── interfaz.py                consola: menús, lectura validada de entradas, permisos por rol
-├── test_nucleo.py             57 pruebas del núcleo y de los flujos de menú
-├── test_servicios_externos.py 28 pruebas de los servicios externos (sin red)
-├── uml.mmd / uml.png          diagrama de clases (Mermaid y su render)
-├── requirements.txt · .env.example
-├── Readme.md · VALIDACION_IA.md
-├── Rubrica.pdf · guías de las unidades 1, 2 y 3
-└── informes/                  generado en ejecución, no versionado
+├── Readme.md                       esta guía: qué es, cómo se ejecuta y dónde está cada evidencia
+├── VALIDACION_IA.md                registro técnico de los 47 cambios y del uso de IA
+├── main.py                         núcleo: modelo de dominio, validaciones, cifrado, SQLite, informes
+├── servicios_externos.py           cliente HTTP, servicios de clima e indicadores, respaldo local
+├── interfaz.py                     consola: menús, lectura validada de entradas, permisos por rol
+├── requirements.txt · .env.example configuración
+├── tests/
+│   ├── test_nucleo.py              57 pruebas del núcleo y de los flujos de menú
+│   └── test_servicios_externos.py  28 pruebas de los servicios externos (sin red)
+├── docs/
+│   ├── uml.mmd · uml.png           modelo vigente: diagrama de clases (Mermaid y su render)
+│   ├── uml_original_unidad1.png    modelo inicial entregado en la Unidad 1
+│   └── evaluacion/                 rúbrica y guías de las unidades 1, 2 y 3
+└── informes/                       generado en ejecución, no versionado
 ```
+
+Los tres módulos de código quedan en la raíz para que el sistema se ejecute con `py -3 main.py` sin configurar rutas; las pruebas y la documentación se agrupan en `tests/` y `docs/`.
 
 `main.py` expone su API pública mediante `__all__` y no conoce la consola; `interfaz.py` solo orquesta entradas y salidas; `servicios_externos.py` no depende de la interfaz. Las tres capas se prueban por separado.
 
-**Modelo.** `uml.mmd` integra el diagrama de la Unidad 1 (con los atributos que exigen sus requisitos) y las clases de la Unidad 3; `uml.png` es su render en mermaid.live. Relaciones implementadas con `dataclass` y anotaciones de tipo:
+**Modelo.** `docs/uml.mmd` integra el diagrama de la Unidad 1 (con los atributos que exigen sus requisitos) y las clases de la Unidad 3; `docs/uml.png` es su render en mermaid.live, y `docs/uml_original_unidad1.png` conserva el modelo inicial entregado en la Unidad 1, para contrastar ambos. Relaciones implementadas con `dataclass` y anotaciones de tipo:
 
 - Un empleado pertenece a un departamento (0..1); un departamento tiene un empleado como gerente (0..1) y agrupa empleados.
 - Empleado ↔ proyecto es muchos a muchos (tabla `empleado_proyecto`), con asignación y desasignación.
@@ -149,7 +155,7 @@ Del diagrama se omiten a propósito detalles de implementación (`IExportador.co
 | **2.1.2** Principios POO | Encapsulamiento: `Usuario._contrasena` con propiedad que no expone el valor y `actualizar_contrasena()` validada. Abstracción y herencia: `IExportador` → `ExportadorPDF`/`ExportadorExcel`; `IServicioExterno` → `ServicioClima`/`ServicioIndicadores`. Polimorfismo: `ServicioReportes` y `consultar_con_respaldo()` trabajan con cualquier implementación. Reutilización: `ejecutar_submenu()`, `leer_o_conservar()`, validadores compartidos entre alta y edición. |
 | **2.1.3** Librería oficial y CRUD | `sqlite3` con `PRAGMA foreign_keys = ON`, filas por nombre, migraciones automáticas en `inicializar_bd()`. Registro, consulta, actualización y eliminación de las cinco entidades, todas accesibles desde el menú; consultas parametrizadas; decorador `@revertir_si_falla` con rollback. |
 | **2.1.4** Errores y validaciones | `try/except` en la conexión inicial, en cada opción del menú y en el acceso; `ValueError` con mensajes claros para texto vacío, correo, RUT, teléfono, montos, fechas, horas (0-24], descripción y contraseña; `EOFError`/`KeyboardInterrupt` cierran la sesión sin traceback. |
-| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 46 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
+| **2.1.5** Validación crítica del código de IA | `VALIDACION_IA.md`: 47 cambios con decisión adoptar/modificar/descartar y su justificación, más un **inventario por fragmento** al inicio del archivo. Hallazgos propios de la revisión: actualizaciones que eludían las validaciones, propiedad que exponía la contraseña, `serie[-1]` que tomaba el dato más antiguo, borrado accidental de `__all__`. |
 
 ### 5.3 Unidad 3: servicios externos y seguridad
 
@@ -202,13 +208,14 @@ RUT chileno con dígito verificador; nombres solo con letras; correo con formato
 ## 8. Pruebas automatizadas
 
 ```powershell
-py -3 -m unittest -v test_nucleo test_servicios_externos
+py -3 -m unittest discover -s tests -t .          # las 85
+py -3 -m unittest -v tests.test_nucleo            # una suite, con detalle
 ```
 
 | Suite | Pruebas | Cubre |
 |---|---|---|
-| `test_nucleo.py` | 57 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
-| `test_servicios_externos.py` | 28 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
+| `tests/test_nucleo.py` | 57 | Migraciones sobre bases antiguas (empleados, gerente, descripción), ficha del empleado y valor hora, cifrado en reposo (solo tokens en la base, clave incorrecta, valores heredados), acceso (admin inicial, autoregistro cerrado, credenciales vacías), CRUD completo desde el menú (edición con Enter, eliminaciones confirmadas, desasignación, registros propios), informes (validación, exportadores, archivo, exclusión de datos cifrados), política de contraseñas y búsquedas. |
+| `tests/test_servicios_externos.py` | 28 | Sesión HTTP simulada con `unittest.mock`: 200, 401, 404, 429, 500 con reintento, timeout, sin conexión, JSON inválido o fuera de rango, respuesta demasiado grande, validación de entradas, cálculo de pago y respaldo local. Dos pruebas verifican que la llave no aparece ni en mensajes ni en el registro técnico. |
 
 Los flujos de menú se prueban con `input()` simulado y salida capturada; las bases son SQLite en memoria; la clave de cifrado de pruebas es independiente del `.env`.
 

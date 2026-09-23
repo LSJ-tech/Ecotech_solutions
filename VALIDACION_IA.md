@@ -64,10 +64,11 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 46)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 47)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
+  - [Cambio 47 - Estructura del repositorio](#cambio-47---estructura-del-repositorio)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1306,7 +1307,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 46)
+## Fase 5 - Documentación y cierre (cambios 44 a 47)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1366,3 +1367,28 @@ La reorganización se hizo con un script que separa las entradas por encabezado,
 
 - Script de verificación: 45 cambios, 6 anexos y el material privado presentes; 0 líneas de contenido perdidas; 0 anclas rotas.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde (sin cambios de código).
+
+### Cambio 47 - Estructura del repositorio
+
+**Fecha:** 2026-09-23
+**Archivos movidos:** `test_nucleo.py` y `test_servicios_externos.py` a `tests/`; `uml.mmd` y `uml.png` a `docs/`; `Rubrica.pdf` y las guías de las unidades a `docs/evaluacion/`
+**Archivo agregado:** `docs/uml_original_unidad1.png` (diagrama entregado en la Unidad 1)
+**Archivos modificados:** `Readme.md`
+**Objetivo:** que quien abra el repositorio vea primero lo que evalúa la rúbrica (el Readme, el registro de validación y los tres módulos ejecutables) y no una lista de quince archivos donde el código, las pruebas, los diagramas y los PDF de la asignatura estaban al mismo nivel.
+
+#### Implementación
+
+- Los tres módulos (`main.py`, `interfaz.py`, `servicios_externos.py`) se mantienen en la raíz: mover el código a `src/` obligaría a configurar rutas o a instalar el paquete para ejecutar `py -3 main.py`, que es la forma documentada de usar el sistema.
+- `tests/` incluye un `__init__.py` con el comando de ejecución en su docstring. Sin ese archivo, `unittest discover` falla con "Start directory is not importable"; con él funcionan tanto `py -3 -m unittest discover -s tests -t .` como `py -3 -m unittest tests.test_nucleo`. Las pruebas siguen importando `main` e `interfaz` porque se ejecutan desde la raíz.
+- `docs/` reúne el modelo (`uml.mmd`, `uml.png`) y, en `docs/evaluacion/`, la rúbrica y las guías de las tres unidades.
+- Se incorporó el diagrama original de la Unidad 1 como `docs/uml_original_unidad1.png`. Estaba solo en el equipo; conservarlo permite contrastar el modelo inicial (`director: str`, `password_hash`, `estado`, sin cifrado ni servicios externos) con el modelo vigente, que es lo que pide la comparación entre modelo inicial y modelo final.
+- `Readme.md` actualiza el árbol del proyecto, las rutas de las suites y el comando de pruebas.
+
+#### Revisión técnica
+
+Se evaluó mover también los módulos a `src/` y renombrar `Readme.md` como `README.md`. Lo primero se descartó por el costo de ejecución descrito arriba; lo segundo, porque en Windows un cambio que solo altera mayúsculas obliga a un renombrado en dos pasos y GitHub muestra igual el archivo actual. Se comprobó que ningún módulo ni prueba abre por ruta los archivos movidos: `DATABASE_PATH` y la carpeta `informes/` se calculan desde `main.py`, que no cambió de lugar.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 85 pruebas en verde desde la nueva ubicación, antes y después de mover los archivos.
+- `git mv` conserva el historial de cada archivo.
