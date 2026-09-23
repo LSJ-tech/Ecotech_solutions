@@ -64,7 +64,7 @@ Cómo usar este documento:
   - [Cambio 41 - Alineación con la Unidad 1, paso 6: informes exportados a archivo](#cambio-41---alineación-con-la-unidad-1-paso-6-informes-exportados-a-archivo)
   - [Cambio 42 - Alineación con la Unidad 1, paso 7: política de contraseñas](#cambio-42---alineación-con-la-unidad-1-paso-7-política-de-contraseñas)
   - [Cambio 43 - Alineación con la Unidad 1, paso 8: búsquedas](#cambio-43---alineación-con-la-unidad-1-paso-8-búsquedas)
-- **Fase 5 - Documentación y cierre (cambios 44 a 54)**
+- **Fase 5 - Documentación y cierre (cambios 44 a 55)**
   - [Cambio 44 - Inventario de fragmentos apoyados por IA](#cambio-44---inventario-de-fragmentos-apoyados-por-ia)
   - [Cambio 45 - Reorganización del Readme orientada a la evaluación](#cambio-45---reorganización-del-readme-orientada-a-la-evaluación)
   - [Cambio 46 - Reorganización de este registro por fases y por criterio](#cambio-46---reorganización-de-este-registro-por-fases-y-por-criterio)
@@ -76,6 +76,7 @@ Cómo usar este documento:
   - [Cambio 52 - Submenús que se repiten hasta volver](#cambio-52---submenús-que-se-repiten-hasta-volver)
   - [Cambio 53 - Tiempo de espera propio para mindicador.cl](#cambio-53---tiempo-de-espera-propio-para-mindicadorcl)
   - [Cambio 54 - Correo institucional derivado del nombre de usuario](#cambio-54---correo-institucional-derivado-del-nombre-de-usuario)
+  - [Cambio 55 - El correo institucional deja de ser editable](#cambio-55---el-correo-institucional-deja-de-ser-editable)
 
 ## Mapa por criterio de la rúbrica
 
@@ -1314,7 +1315,7 @@ Se evaluó con apoyo de IA mantener el autoregistro de empleados con un "código
 - `py -3 -m py_compile` y `ruff check --select F` sin errores.
 - `py -3 -m unittest test_nucleo test_servicios_externos`: 85 pruebas en verde. Las cuatro nuevas verifican la coincidencia parcial sin distinguir mayúsculas y el filtro vacío; el escapado de `%` y `_`; la búsqueda de empleados por RUT, nombre y apellido; y el menú (Enter lista todo, texto filtra, sin coincidencias informa el filtro).
 
-## Fase 5 - Documentación y cierre (cambios 44 a 54)
+## Fase 5 - Documentación y cierre (cambios 44 a 55)
 
 ### Cambio 44 - Inventario de fragmentos apoyados por IA
 
@@ -1567,3 +1568,24 @@ Se evaluó subir el timeout general a 20 s: se descartó porque penalizaría al 
 - `py -3 -m unittest discover -s tests -t .`: 100 pruebas en verde. Las cuatro nuevas verifican la derivación del correo y el rechazo de un usuario que no produce dirección válida; la normalización de tildes, ñ, espacios y apóstrofos; que un apellido con tilde produce usuario y correo escribibles conservando el nombre con tildes en la ficha; y que ante un homónimo el correo sigue al usuario alternativo. Las pruebas de registro existentes dejaron de entregar el correo por teclado.
 - Prueba manual con la cuenta `cfuentes`: al crear una cuenta `rrhh` el formulario ya no pide el correo y termina mostrando `Usuario: mzuniga`, `Correo: mzuniga@ecotech.cl` y la ficha `21098765-7`.
 - El código de este cambio se subió en el commit anterior sin su documentación, porque el guion que actualiza los archivos falló y el commit se ejecutó igual; este commit la completa.
+
+### Cambio 55 - El correo institucional deja de ser editable
+
+**Fecha:** 2026-09-23
+**Archivos modificados:** `interfaz.py`, `tests/test_nucleo.py`, `Readme.md`
+**Objetivo:** cerrar la regla del cambio anterior. El correo se generaba al crear la cuenta, pero `Editar ficha` todavía permitía reemplazarlo, de modo que el estándar podía romperse después.
+
+#### Implementación
+
+- `editar_empleado_menu()` ya no pide el correo: lo muestra como `Correo institucional: <correo> (no editable)` y envía el valor almacenado a `actualizar_empleado()`.
+- `validar_correo()` quedó sin usos —el correo no se escribe ni al crear ni al editar— y se eliminó de la interfaz. La validación del formato sigue en el modelo `Empleado`, que exige `@`, y en `generar_correo()`, que construye la dirección.
+
+#### Revisión técnica
+
+En el cambio 54 se había conservado la edición para permitir correcciones excepcionales de RR.HH. El equipo resolvió lo contrario: si la dirección es una regla de la empresa derivada del nombre de usuario, dejarla editable permitiría que ambos identificadores dejaran de coincidir, que es lo que el cambio anterior buscaba evitar. Mostrar el valor sin permitir escribirlo mantiene visible el dato al revisar la ficha. El correo sigue siendo `UNIQUE` en la base, y la función `actualizar_empleado()` conserva el parámetro porque también la usan las pruebas y cualquier corrección puntual desde el núcleo.
+
+#### Validación
+
+- `py -3 -m unittest discover -s tests -t .`: 100 pruebas en verde. La prueba de edición entrega un campo menos, comprueba que aparezca la leyenda `(no editable)` y que el correo almacenado no cambie tras editar el resto de la ficha.
+- Prueba manual sobre una copia de la base: al editar la ficha de `mmorales` el formulario informa `Correo institucional: mmorales@ecotech.cl (no editable)` y permite modificar cargo y salario.
+- Los correos cargados con el formato anterior (`matias.morales@ecotech.cl`) se normalizaron al formato derivado del usuario mediante `actualizar_empleado()`, de modo que la base local quedó consistente con la regla.

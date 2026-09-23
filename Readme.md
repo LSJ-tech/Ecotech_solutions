@@ -69,7 +69,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 |---|---|---|
 | 1 | Gestionar departamentos: crear, editar nombre, eliminar, asignar o cambiar gerente, asignar o cambiar el departamento de un empleado | admin, rrhh |
 | 2 | Listar o buscar departamentos por nombre (Enter lista todos) | todos |
-| 3 | Gestionar empleados: editar ficha (Enter conserva cada valor), eliminar | admin, rrhh |
+| 3 | Gestionar empleados: editar ficha (Enter conserva cada valor; el correo institucional se informa y no se edita), eliminar | admin, rrhh |
 | 4 | Listar o buscar empleados: `admin` y `rrhh` buscan por RUT, nombre o apellido y ven la ficha personal; un `empleado` busca por nombre o apellido y ve enmascarado el RUT de los demás | todos |
 | 5 | Gestionar proyectos: crear, editar, eliminar, asignar y desasignar empleados | admin, rrhh |
 | 6 | Listar proyectos | todos |
@@ -88,7 +88,7 @@ Tres roles: `admin`, `rrhh` (requiere código y ficha de empleado; gestiona todo
 
 Comportamientos que conviene conocer al probar:
 
-- **Usuario y correo automáticos**: el nombre de usuario se forma con la inicial del nombre y el primer apellido (`Logan Silva` → `lsilva`) y el correo se deriva de él (`lsilva@ecotech.cl`). Ninguno se escribe a mano, y ambos se normalizan sin tildes ni ñ para que se puedan escribir en cualquier teclado; al terminar, el registro muestra usuario, correo y RUT de la ficha.
+- **Usuario y correo automáticos**: el nombre de usuario se forma con la inicial del nombre y el primer apellido (`Logan Silva` → `lsilva`) y el correo se deriva de él (`lsilva@ecotech.cl`). Ninguno se escribe a mano, y ambos se normalizan sin tildes ni ñ para que se puedan escribir en cualquier teclado; al terminar, el registro muestra usuario, correo y RUT de la ficha. El correo tampoco se edita después: es una regla de la empresa, y al editar la ficha se informa como dato fijo.
 - **RUT**: se pide con el formato `12345678-5` (cuerpo, guion y dígito verificador); el sistema normaliza puntos y espacios y rechaza un dígito verificador incorrecto. En el listado, un `empleado` ve el RUT de sus compañeros como `****5678-5` y el suyo completo.
 - **Pausa antes de volver**: tras cada opción el sistema espera un Enter (`Presione Enter para volver al menu...`), de modo que el listado, el informe o el mensaje de error se puedan leer antes de que el menú se redibuje.
 - **Los submenús se repiten**: dentro de `Gestionar …`, `Editar o eliminar registros` o `Generar informe` se pueden encadenar varias operaciones, incluso si una falla, y se vuelve al menú principal con `0. Volver`.

@@ -169,15 +169,6 @@ def a_horas(valor: str) -> float:
 	return validar_horas(horas)
 
 
-def validar_correo(valor: str) -> str:
-	"""Valida un correo con un formato básico (texto no vacío con @)."""
-
-	correo = validar_texto(valor, "El correo")
-	if "@" not in correo:
-		raise ValueError("El correo debe tener un formato válido, por ejemplo nombre@dominio.cl.")
-	return correo
-
-
 def leer_o_conservar(mensaje: str, actual: Any, convertir: Callable[[str], Any]) -> Any:
 	"""Solicita un valor mostrando el actual; Enter lo conserva y un error repite solo ese campo."""
 
@@ -993,7 +984,8 @@ def editar_empleado_menu(connection: sqlite3.Connection) -> None:
 	apellido = leer_o_conservar(
 		"Apellido", actual.apellido, lambda v: validar_texto(v, "El apellido")
 	)
-	correo = leer_o_conservar("Correo", actual.correo, validar_correo)
+	# El correo es una regla de la empresa (usuario@dominio) y no se edita.
+	print(f"Correo institucional: {actual.correo} (no editable)")
 	cargo = leer_o_conservar("Cargo", actual.cargo, lambda v: validar_texto(v, "El cargo"))
 	direccion = leer_o_conservar(
 		"Direccion", actual.direccion, lambda v: validar_texto(v, "La dirección")
@@ -1010,7 +1002,7 @@ def editar_empleado_menu(connection: sqlite3.Connection) -> None:
 		actual.rut,
 		nombre=nombre,
 		apellido=apellido,
-		correo=correo,
+		correo=actual.correo,
 		cargo=cargo,
 		direccion=direccion,
 		telefono=telefono,

@@ -542,9 +542,12 @@ class PruebasCrudCompleto(unittest.TestCase):
 	def test_menu_edita_ficha_conservando_valores_con_enter(self):
 		salida = ejecutar_con_entradas(
 			lambda: ui.editar_empleado_menu(self.connection),
-			[RUT, "", "", "", "Lider", "", "abc", "+56 9 8888 7777", "", "-5", "1500000"],
+			# El correo no se pide: es una regla de la empresa y solo se informa.
+			[RUT, "", "", "Lider", "", "abc", "+56 9 8888 7777", "", "-5", "1500000"],
 		)
 		self.assertIn("Ficha actualizada", salida)
+		self.assertIn("(no editable)", salida)
+		self.assertEqual(main.listar_empleados(self.connection)[0]["correo"], "ana@x.cl")
 		self.assertIn("solo puede contener", salida)  # el teléfono inválido repitió solo ese campo
 		ficha = main.listar_empleados(self.connection)[0]
 		self.assertEqual((ficha["nombre"], ficha["cargo"], ficha["telefono"]), ("Ana", "Lider", "+56 9 8888 7777"))
